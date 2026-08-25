@@ -120,6 +120,8 @@ public class SecurityConfig {
                                 org.springframework.http.HttpMethod.GET,
                                 "/properties",
                                 "/properties/{propertyId}",
+                                "/properties/{propertyId}/ai-evaluation",
+                                "/properties/{propertyId}/isochrone",
                                 "/properties/map",
                                 "/properties/surge-rankings"
                         ).permitAll()
