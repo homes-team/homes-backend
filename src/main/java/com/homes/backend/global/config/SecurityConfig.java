@@ -81,6 +81,13 @@ public class SecurityConfig {
         return expressionHandler;
     }
 
+    /**
+     * Configures request authorization, JSON security errors, and JWT authentication.
+     *
+     * @param http Spring Security HTTP configuration
+     * @return configured security filter chain
+     * @throws Exception when the filter chain cannot be built
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -120,6 +127,8 @@ public class SecurityConfig {
                                 org.springframework.http.HttpMethod.GET,
                                 "/properties",
                                 "/properties/{propertyId}",
+                                "/properties/{propertyId}/ai-evaluation",
+                                "/properties/{propertyId}/isochrone",
                                 "/properties/map",
                                 "/properties/surge-rankings",
                                 "/properties/*/verifications",
