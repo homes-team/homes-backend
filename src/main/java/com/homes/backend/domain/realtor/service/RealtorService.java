@@ -72,11 +72,12 @@ public class RealtorService {
             throw new CustomException(RealtorErrorCode.DUPLICATE_BUSINESS_NUM);
         }
 
-        // 3-1. 업로드된 서류/프로필 이미지 용량 검증 (presigned PUT은 사전 크기 제한이 불가능해 업로드 후 검사)
-        s3PresignedUrlService.validateUploadedFileSize(request.businessCertUrl());
-        s3PresignedUrlService.validateUploadedFileSize(request.agentCertUrl());
+        // 3-1. 업로드된 서류/프로필 이미지 검증 - 용량 확인 + 이 이메일로 발급받은 URL이 맞는지 대조 후 소비 처리
+        String uploaderIdentity = "email:" + request.email();
+        s3PresignedUrlService.validateAndConsumeUploadedFile(request.businessCertUrl(), uploaderIdentity);
+        s3PresignedUrlService.validateAndConsumeUploadedFile(request.agentCertUrl(), uploaderIdentity);
         if (request.profileImageUrl() != null) {
-            s3PresignedUrlService.validateUploadedFileSize(request.profileImageUrl());
+            s3PresignedUrlService.validateAndConsumeUploadedFile(request.profileImageUrl(), uploaderIdentity);
         }
 
         // 4. 유저 계정 생성

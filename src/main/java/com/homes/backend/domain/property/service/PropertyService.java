@@ -103,9 +103,10 @@ public class PropertyService {
          */
         if (reqDto.imageUrls() != null && !reqDto.imageUrls().isEmpty()) {
             List<String> imageUrls = reqDto.imageUrls();
+            String uploaderIdentity = "user:" + userId;
 
             for (int i = 0; i < imageUrls.size(); i++) {
-                s3PresignedUrlService.validateUploadedFileSize(imageUrls.get(i));
+                s3PresignedUrlService.validateAndConsumeUploadedFile(imageUrls.get(i), uploaderIdentity);
 
                 PropertyImage propertyImage = PropertyImage.builder()
                         .imageUrl(imageUrls.get(i))
@@ -236,11 +237,12 @@ public class PropertyService {
          */
         if (reqDto.newImageUrls() != null) {
             List<String> newImageUrls = reqDto.newImageUrls();
+            String uploaderIdentity = "user:" + userId;
 
             property.getImages().clear();
 
             for (int i = 0; i < newImageUrls.size(); i++) {
-                s3PresignedUrlService.validateUploadedFileSize(newImageUrls.get(i));
+                s3PresignedUrlService.validateAndConsumeUploadedFile(newImageUrls.get(i), uploaderIdentity);
 
                 PropertyImage propertyImage = PropertyImage.builder()
                         .imageUrl(newImageUrls.get(i))

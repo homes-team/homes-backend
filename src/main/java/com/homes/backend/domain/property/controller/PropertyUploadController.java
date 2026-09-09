@@ -4,11 +4,14 @@ import com.homes.backend.domain.property.dto.response.PresignedUrlResDto;
 import com.homes.backend.global.exception.CustomException;
 import com.homes.backend.global.exception.GlobalErrorCode;
 import com.homes.backend.global.response.ApiResponse;
+import com.homes.backend.global.security.UserPrincipal;
 import com.homes.backend.global.storage.PresignedUploadInfo;
 import com.homes.backend.global.storage.S3PresignedUrlService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -32,11 +35,36 @@ public class PropertyUploadController implements PropertyUploadControllerDocs {
 
     @Override
     @GetMapping("/presigned-url")
-    public ApiResponse<PresignedUrlResDto> getPresignedUrl(@RequestParam String fileName, HttpServletRequest request) {
+    public ApiResponse<PresignedUrlResDto> getPresignedUrl(
+            @RequestParam String fileName,
+            @RequestParam(required = false) String email,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            HttpServletRequest request
+    ) {
         checkRateLimit(request.getRemoteAddr());
 
-        PresignedUploadInfo info = s3PresignedUrlService.issueUploadUrl(UPLOAD_FOLDER, fileName);
+        String identity = resolveIdentity(userPrincipal, email);
+        PresignedUploadInfo info = s3PresignedUrlService.issueUploadUrl(UPLOAD_FOLDER, fileName, identity);
         return ApiResponse.onSuccess(PresignedUrlResDto.from(info));
+    }
+
+    /**
+     * 로그인한 유저(매물 사진)는 userId로, 아직 계정이 없는 중개사 가입 지원자(서류 사진)는
+     * 이메일 인증을 마친 email로 발급 주체를 식별한다. 나중에 실제 제출 시 이 식별자와 대조한다.
+     */
+    private String resolveIdentity(UserPrincipal userPrincipal, String email) {
+        if (userPrincipal != null) {
+            return "user:" + userPrincipal.getId();
+        }
+
+        if (StringUtils.hasText(email)) {
+            Object isVerified = redisTemplate.opsForValue().get("AUTH_SUCCESS:" + email);
+            if ("TRUE".equals(isVerified)) {
+                return "email:" + email;
+            }
+        }
+
+        throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
     }
 
     private void checkRateLimit(String clientIp) {
