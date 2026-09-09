@@ -5,6 +5,8 @@ import com.homes.backend.global.exception.GlobalErrorCode;
 import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -20,6 +22,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.UUID;
 
 /**
@@ -35,6 +38,12 @@ public class S3PresignedUrlService {
     // 발급받은 사람과 실제 제출한 사람이 같은지 대조하기 위한 기록의 유효 기간 (폼 작성 시간 감안)
     private static final Duration ISSUED_KEY_RECORD_TTL = Duration.ofMinutes(30);
     private static final String ISSUED_KEY_PREFIX = "PRESIGN_ISSUED:";
+
+    // 저장된 값이 identity와 같을 때만 원자적으로 삭제한다 (동시 요청에서도 최대 1번만 소비되도록 GET+DEL을 하나의 명령으로 처리)
+    private static final RedisScript<Long> COMPARE_AND_DELETE_SCRIPT = new DefaultRedisScript<>(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            Long.class
+    );
 
     private final S3Presigner presigner;
     private final S3Client s3Client;
@@ -130,14 +139,16 @@ public class S3PresignedUrlService {
         }
 
         String issuedKeyRecord = ISSUED_KEY_PREFIX + key;
-        Object recordedIdentity = redisTemplate.opsForValue().get(issuedKeyRecord);
+        Long deletedCount = redisTemplate.execute(
+                COMPARE_AND_DELETE_SCRIPT,
+                Collections.singletonList(issuedKeyRecord),
+                identity
+        );
 
-        // 발급 기록이 없거나(만료/이미 소비됨) 발급받은 사람과 지금 제출한 사람이 다르면 거부
-        if (recordedIdentity == null || !recordedIdentity.equals(identity)) {
+        // 원자적 compare-and-delete가 실패했다면(기록 없음/만료/소비됨/identity 불일치) 거부
+        if (deletedCount == null || deletedCount == 0L) {
             throw new CustomException(GlobalErrorCode.INVALID_INPUT);
         }
-
-        redisTemplate.delete(issuedKeyRecord);
     }
 
     @PreDestroy
