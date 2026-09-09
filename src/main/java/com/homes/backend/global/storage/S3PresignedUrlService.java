@@ -12,8 +12,8 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
@@ -103,8 +103,12 @@ public class S3PresignedUrlService {
                     .bucket(bucket)
                     .key(key)
                     .build());
-        } catch (NoSuchKeyException e) {
-            throw new CustomException(GlobalErrorCode.INVALID_INPUT);
+        } catch (S3Exception e) {
+            // HeadObject는 응답 바디가 없어 SDK가 NoSuchKeyException 대신 일반 S3Exception(404)으로 던질 수도 있다
+            if (e.statusCode() == 404) {
+                throw new CustomException(GlobalErrorCode.INVALID_INPUT);
+            }
+            throw e;
         }
 
         if (headObjectResponse.contentLength() != null && headObjectResponse.contentLength() > MAX_UPLOAD_SIZE_BYTES) {
