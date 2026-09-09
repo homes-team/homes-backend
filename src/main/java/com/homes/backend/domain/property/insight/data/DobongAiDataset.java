@@ -24,6 +24,9 @@ public class DobongAiDataset {
     private Map<String, Entry> entriesByAddress = Map.of();
     private LocalDateTime loadedAt;
 
+    /**
+     * Loads the bundled JSON Lines dataset and indexes entries by normalized address.
+     */
     @PostConstruct
     void load() {
         Map<String, Entry> loaded = new HashMap<>();
@@ -42,15 +45,32 @@ public class DobongAiDataset {
         loadedAt = LocalDateTime.now();
     }
 
+    /**
+     * Finds the dataset entry matching an address after normalization.
+     *
+     * @param address property address
+     * @return the matching entry, or an empty value when no match exists
+     */
     public Optional<Entry> findByAddress(String address) {
         if (address == null || address.isBlank()) return Optional.empty();
         return Optional.ofNullable(entriesByAddress.get(normalizeAddress(address)));
     }
 
+    /**
+     * Returns when the in-memory dataset was loaded.
+     *
+     * @return dataset load time
+     */
     public LocalDateTime loadedAt() {
         return loadedAt;
     }
 
+    /**
+     * Normalizes address formatting for exact dataset lookups.
+     *
+     * @param address address to normalize
+     * @return normalized address
+     */
     static String normalizeAddress(String address) {
         return address
                 .trim()
@@ -59,6 +79,12 @@ public class DobongAiDataset {
                 .replaceAll("[,()]", "");
     }
 
+    /**
+     * Converts one JSON Lines object into a dataset entry.
+     *
+     * @param root parsed dataset object
+     * @return mapped dataset entry
+     */
     private Entry parse(JsonNode root) {
         JsonNode basic = root.path("basic_info");
         JsonNode scores = root.path("scores");
@@ -90,6 +116,12 @@ public class DobongAiDataset {
         );
     }
 
+    /**
+     * Reads an optional integer field without converting JSON null to zero.
+     *
+     * @param node integer node, which may be absent or null
+     * @return integer value, or {@code null} when unavailable
+     */
     private Integer nullableInt(JsonNode node) {
         return node == null || node.isNull() ? null : node.asInt();
     }
@@ -116,6 +148,13 @@ public class DobongAiDataset {
             String nearestHospital,
             double hospitalDistanceMeters
     ) {
+        /**
+         * Combines duplicate address rows while retaining only an agreed build year.
+         *
+         * @param first first row for the address
+         * @param second duplicate row for the address
+         * @return merged dataset entry
+         */
         static Entry mergeSameAddress(Entry first, Entry second) {
             Integer mergedBuildYear = first.buildYear != null && first.buildYear.equals(second.buildYear)
                     ? first.buildYear

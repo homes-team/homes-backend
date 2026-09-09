@@ -33,6 +33,9 @@ class PropertyInsightServiceTest {
     private PropertyInsightService service;
     private Property property;
 
+    /**
+     * Creates the service under test and a property with a valid coordinate.
+     */
     @BeforeEach
     void setUp() {
         service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset);
@@ -56,6 +59,9 @@ class PropertyInsightServiceTest {
                 .build();
     }
 
+    /**
+     * Verifies conversion from a 100-point score to the five-point display scale.
+     */
     @Test
     void convertsHundredPointScoreToFivePointScore() {
         assertThat(PropertyInsightService.toDisplayScore(86.0)).isEqualTo(4.3);
@@ -63,6 +69,9 @@ class PropertyInsightServiceTest {
         assertThat(PropertyInsightService.toDisplayScore(null)).isNull();
     }
 
+    /**
+     * Verifies that missing evaluation sources produce six pending categories.
+     */
     @Test
     void returnsSixPendingCategoriesWhenGeospatialScoresAreNotLoaded() {
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
@@ -78,6 +87,9 @@ class PropertyInsightServiceTest {
         assertThat(response.overall().completeness()).isZero();
     }
 
+    /**
+     * Verifies that a supported request returns a closed GeoJSON polygon.
+     */
     @Test
     void returnsClosedGeoJsonPolygonForSupportedIsochroneRequest() {
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
@@ -92,6 +104,9 @@ class PropertyInsightServiceTest {
         assertThat(ring.getFirst()).isEqualTo(ring.getLast());
     }
 
+    /**
+     * Verifies that an unsupported travel duration raises the expected domain error.
+     */
     @Test
     void rejectsUnsupportedIsochroneTime() {
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));

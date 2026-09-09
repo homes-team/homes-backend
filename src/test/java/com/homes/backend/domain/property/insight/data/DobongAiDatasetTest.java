@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DobongAiDatasetTest {
+    /**
+     * Verifies that the bundled dataset loads and supports normalized address lookup.
+     */
     @Test
     void loadsBundledDatasetAndMatchesNormalizedAddress() {
         DobongAiDataset dataset = new DobongAiDataset(new ObjectMapper());
@@ -19,6 +22,9 @@ class DobongAiDatasetTest {
         assertThat(entry.orElseThrow().nearestSubway()).isNotBlank();
     }
 
+    /**
+     * Verifies that equivalent Seoul address formats normalize to the same key.
+     */
     @Test
     void normalizesWhitespaceAndSeoulAbbreviation() {
         assertThat(DobongAiDataset.normalizeAddress(" 서울시 도봉구 방학동 "))

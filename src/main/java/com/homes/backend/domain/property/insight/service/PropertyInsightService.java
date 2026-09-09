@@ -33,6 +33,12 @@ public class PropertyInsightService {
     private final PropertyAiEvaluationRepository evaluationRepository;
     private final DobongAiDataset dobongAiDataset;
 
+    /**
+     * Builds the six-category AI evaluation for a property from stored or bundled data.
+     *
+     * @param propertyId property identifier
+     * @return evaluation scores and generated report
+     */
     public AiEvaluationRespDto getAiEvaluation(Long propertyId) {
         Property property = getProperty(propertyId);
         Optional<PropertyAiEvaluation> stored = evaluationRepository.findById(propertyId);
@@ -89,6 +95,14 @@ public class PropertyInsightService {
         );
     }
 
+    /**
+     * Builds a virtual isochrone polygon for a supported travel mode and duration.
+     *
+     * @param propertyId property identifier
+     * @param requestedMode requested travel mode
+     * @param travelTimeMinutes requested travel duration in minutes
+     * @return isochrone response
+     */
     public IsochroneRespDto getIsochrone(Long propertyId, String requestedMode, int travelTimeMinutes) {
         Property property = getProperty(propertyId);
         String mode = requestedMode == null ? "" : requestedMode.toLowerCase(Locale.ROOT);
@@ -125,11 +139,27 @@ public class PropertyInsightService {
         );
     }
 
+    /**
+     * Loads a property or raises the domain-specific not-found error.
+     *
+     * @param propertyId property identifier
+     * @return persisted property
+     */
     private Property getProperty(Long propertyId) {
         return propertyRepository.findById(propertyId)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
     }
 
+    /**
+     * Creates a category response while normalizing its raw and display scores.
+     *
+     * @param key category identifier
+     * @param label display label
+     * @param score raw score
+     * @param source score source
+     * @param description category explanation
+     * @return normalized category response
+     */
     private CategoryScore category(CategoryKey key, String label, Double score, ScoreSource source, String description) {
         Double normalized = score == null ? null : round1(Math.max(0, Math.min(100, score)));
         return new CategoryScore(
@@ -143,23 +173,53 @@ public class PropertyInsightService {
         );
     }
 
+    /**
+     * Converts a 100-point score to the one-decimal, five-point display scale.
+     *
+     * @param rawScore score on the 100-point scale
+     * @return score on the five-point scale, or {@code null}
+     */
     static Double toDisplayScore(Double rawScore) {
         return rawScore == null ? null : Math.round(rawScore / 20.0 * 10.0) / 10.0;
     }
 
+    /**
+     * Calculates the equally weighted infrastructure score.
+     *
+     * @param entry source dataset entry
+     * @return infrastructure score
+     */
     static double calculateInfrastructureScore(DobongAiDataset.Entry entry) {
         return round1((entry.hospitalScore() + entry.martScore() + entry.cultureScore()) / 3.0);
     }
 
+    /**
+     * Calculates a building-condition score from its construction year.
+     *
+     * @param buildYear construction year
+     * @return bounded building-condition score
+     */
     static double calculateBuildingConditionScore(int buildYear) {
         int age = Math.max(0, LocalDateTime.now().getYear() - buildYear);
         return Math.max(20.0, Math.min(100.0, 100.0 - age * 2.0));
     }
 
+    /**
+     * Rounds a number to one decimal place.
+     *
+     * @param value number to round
+     * @return rounded value
+     */
     private static double round1(double value) {
         return Math.round(value * 10.0) / 10.0;
     }
 
+    /**
+     * Describes nearby education facilities when dataset details are available.
+     *
+     * @param dataset matching dataset entry
+     * @return school-category description
+     */
     private String schoolDescription(Optional<DobongAiDataset.Entry> dataset) {
         return dataset.map(entry -> "가장 가까운 학교까지 약 " + Math.round(entry.nearestSchoolDistanceMeters())
                 + "m이며, 1km 내 초·중·고교가 "
@@ -168,6 +228,12 @@ public class PropertyInsightService {
                 .orElse("학교 접근성과 주변 교육 인프라를 기준으로 산정합니다.");
     }
 
+    /**
+     * Describes nearby public transportation when dataset details are available.
+     *
+     * @param dataset matching dataset entry
+     * @return transportation-category description
+     */
     private String transportDescription(Optional<DobongAiDataset.Entry> dataset) {
         return dataset.map(entry -> "가장 가까운 지하철역은 " + entry.nearestSubway() + "(약 "
                 + Math.round(entry.subwayDistanceMeters()) + "m), 버스정류장은 " + entry.nearestBus()
@@ -175,24 +241,49 @@ public class PropertyInsightService {
                 .orElse("지하철역 거리와 주변 버스 교통 밀도를 기준으로 산정합니다.");
     }
 
+    /**
+     * Describes nearby parks when dataset details are available.
+     *
+     * @param dataset matching dataset entry
+     * @return nature-category description
+     */
     private String natureDescription(Optional<DobongAiDataset.Entry> dataset) {
         return dataset.map(entry -> "가장 가까운 공원은 " + entry.nearestPark() + "이며 약 "
                 + Math.round(entry.parkDistanceMeters()) + "m 거리입니다.")
                 .orElse("공원과 녹지의 거리 및 밀도를 기준으로 산정합니다.");
     }
 
+    /**
+     * Describes the construction-year basis for the building score.
+     *
+     * @param dataset matching dataset entry
+     * @return building-condition description
+     */
     private String buildingDescription(Optional<DobongAiDataset.Entry> dataset) {
         return dataset.flatMap(entry -> Optional.ofNullable(entry.buildYear()))
                 .map(year -> year + "년 준공 정보를 기준으로 산정한 점수입니다.")
                 .orElse("준공연도와 건물 시설 정보가 수집되면 평가에 반영됩니다.");
     }
 
+    /**
+     * Describes the facilities included in the infrastructure score.
+     *
+     * @param dataset matching dataset entry
+     * @return infrastructure-category description
+     */
     private String infrastructureDescription(Optional<DobongAiDataset.Entry> dataset) {
         return dataset.map(entry -> "병원·마트·문화시설 점수를 동일 가중 평균했습니다. 가까운 병원은 "
                 + entry.nearestHospital() + "이며 약 " + Math.round(entry.hospitalDistanceMeters()) + "m 거리입니다.")
                 .orElse("병원, 마트, 문화시설 등 생활 편의시설 접근성을 기준으로 산정합니다.");
     }
 
+    /**
+     * Generates a rule-based summary with up to three strengths and weaknesses.
+     *
+     * @param categories evaluated categories
+     * @param notice incomplete-data notice
+     * @return structured evaluation report
+     */
     private Report buildReport(List<CategoryScore> categories, String notice) {
         List<CategoryScore> available = categories.stream().filter(c -> c.rawScore() != null).toList();
         if (available.isEmpty()) {
@@ -205,6 +296,15 @@ public class PropertyInsightService {
         return new Report("수집된 입지 데이터를 기준으로 매물의 생활 여건을 평가했습니다.", strengths, weaknesses, notice);
     }
 
+    /**
+     * Creates a deterministic, closed radial polygon around a coordinate.
+     *
+     * @param latitude center latitude
+     * @param longitude center longitude
+     * @param radiusMeters nominal polygon radius in meters
+     * @param seed property-specific shape seed
+     * @return closed longitude-latitude coordinate ring
+     */
     private List<List<Double>> createVirtualRing(double latitude, double longitude, int radiusMeters, long seed) {
         double latitudeDegreePerMeter = 1.0 / 111_320.0;
         double longitudeDegreePerMeter = 1.0 / (111_320.0 * Math.cos(Math.toRadians(latitude)));
