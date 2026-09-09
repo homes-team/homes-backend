@@ -8,6 +8,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -21,9 +22,11 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 클라이언트가 S3에 직접 파일을 업로드할 수 있는 임시 권한 URL(Presigned URL)을 발급한다.
@@ -95,7 +98,7 @@ public class S3PresignedUrlService {
 
         redisTemplate.opsForValue().set(ISSUED_KEY_PREFIX + key, identity, ISSUED_KEY_RECORD_TTL);
 
-        return new PresignedUploadInfo(presignedRequest.url().toString(), publicUrlPrefix + key);
+        return new PresignedUploadInfo(presignedRequest.url().toString(), publicUrlPrefix + encodeKeyForUrl(key));
     }
 
     private String extractExtension(String fileName) {
@@ -104,6 +107,28 @@ public class S3PresignedUrlService {
         }
         int dotIndex = fileName.lastIndexOf('.');
         return dotIndex >= 0 ? fileName.substring(dotIndex) : "";
+    }
+
+    /**
+     * 사용자가 보낸 원본 파일명(fileName)이 그대로 확장자에 섞여 들어올 수 있어,
+     * #, ?, %, 공백, 유니코드 등이 fragment/query로 오해석되지 않도록 세그먼트 단위로 인코딩한다.
+     * "/"는 경로 구분자로 유지하기 위해 세그먼트별로 나눠서만 인코딩한다.
+     */
+    private String encodeKeyForUrl(String key) {
+        return java.util.Arrays.stream(key.split("/", -1))
+                .map(segment -> UriUtils.encodePathSegment(segment, StandardCharsets.UTF_8))
+                .collect(Collectors.joining("/"));
+    }
+
+    /**
+     * encodeKeyForUrl()의 역연산 - fileUrl에서 뽑아낸 인코딩된 키를 S3 API/Redis 조회용 원본 키로 되돌린다.
+     */
+    private String decodeKeyFromUrl(String encodedKey) {
+        try {
+            return UriUtils.decode(encodedKey, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            throw new CustomException(GlobalErrorCode.INVALID_INPUT);
+        }
     }
 
     /**
@@ -117,7 +142,7 @@ public class S3PresignedUrlService {
             throw new CustomException(GlobalErrorCode.INVALID_INPUT);
         }
 
-        String key = fileUrl.substring(publicUrlPrefix.length());
+        String key = decodeKeyFromUrl(fileUrl.substring(publicUrlPrefix.length()));
 
         HeadObjectResponse headObjectResponse;
         try {
