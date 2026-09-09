@@ -7,6 +7,7 @@ import com.homes.backend.domain.property.insight.data.DobongAiDataset;
 import com.homes.backend.domain.property.insight.dto.AiEvaluationRespDto;
 import com.homes.backend.domain.property.insight.dto.IsochroneRespDto;
 import com.homes.backend.domain.property.insight.repository.PropertyAiEvaluationRepository;
+import com.homes.backend.domain.property.building.repository.PropertyBuildingInformationRepository;
 import com.homes.backend.domain.property.repository.PropertyRepository;
 import com.homes.backend.global.exception.CustomException;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,7 @@ class PropertyInsightServiceTest {
     @Mock PropertyRepository propertyRepository;
     @Mock PropertyAiEvaluationRepository evaluationRepository;
     @Mock DobongAiDataset dobongAiDataset;
+    @Mock PropertyBuildingInformationRepository buildingInformationRepository;
 
     private PropertyInsightService service;
     private Property property;
@@ -38,7 +40,7 @@ class PropertyInsightServiceTest {
      */
     @BeforeEach
     void setUp() {
-        service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset);
+        service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset, buildingInformationRepository);
         Point point = new GeometryFactory().createPoint(new Coordinate(127.0471, 37.6688));
         point.setSRID(4326);
         property = Property.builder()
@@ -77,6 +79,7 @@ class PropertyInsightServiceTest {
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
         when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
         when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
+        when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
 
         AiEvaluationRespDto response = service.getAiEvaluation(1L);
 
