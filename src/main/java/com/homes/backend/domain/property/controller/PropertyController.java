@@ -14,12 +14,9 @@ import com.homes.backend.global.response.ApiResponse;
 import com.homes.backend.global.security.UserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -31,18 +28,17 @@ public class PropertyController implements PropertyControllerDocs {
     private final PropertyRankingService propertyRankingService;
 
     @Override
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping
     public ApiResponse<Long> createProperty(
-            @ModelAttribute PropertyCreateReqDto reqDto,
-            @RequestPart(value = "images", required = false) List<MultipartFile> images,
+            @RequestBody PropertyCreateReqDto reqDto,
             @AuthenticationPrincipal UserPrincipal userPrincipal
-    ) throws IOException {
+    ) {
 
         if (userPrincipal == null) {
             throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
         }
 
-        Long propertyId = propertyService.createProperty(reqDto, userPrincipal.getId(), images);
+        Long propertyId = propertyService.createProperty(reqDto, userPrincipal.getId());
         return ApiResponse.onSuccess(propertyId);
     }
 
@@ -96,19 +92,18 @@ public class PropertyController implements PropertyControllerDocs {
     }
 
     @Override
-    @PatchMapping(value = "/{propertyId}", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.APPLICATION_JSON_VALUE})
+    @PatchMapping("/{propertyId}")
     public ApiResponse<Void> updateProperty(
             @PathVariable Long propertyId,
-            @ModelAttribute PropertyUpdateReqDto reqDto,
-            @RequestPart(value = "newImages", required = false) List<MultipartFile> newImages,
+            @RequestBody PropertyUpdateReqDto reqDto,
             @AuthenticationPrincipal UserPrincipal userPrincipal
-    ) throws IOException { // S3 업로드 시 발생할 수 있는 에러 처리
+    ) {
 
         if (userPrincipal == null) {
             throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
         }
 
-        propertyService.updateProperty(propertyId, reqDto, newImages, userPrincipal.getId());
+        propertyService.updateProperty(propertyId, reqDto, userPrincipal.getId());
         return ApiResponse.onSuccess();
     }
 

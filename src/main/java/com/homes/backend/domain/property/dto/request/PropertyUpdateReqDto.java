@@ -23,5 +23,7 @@ public record PropertyUpdateReqDto (
         @Schema(description = "희망 중개 수수료", example = "0.3") Double desiredBrokerageFee,
         @Schema(description = "매물 옵션 리스트", example = "[\"AIR_CONDITIONER\", \"PARKING\"]") List<PropertyOption> options,
         @Schema(description = "위도(Latitude)", example = "37.4979") Double latitude,
-        @Schema(description = "경도(Longitude)", example = "127.0276") Double longitude
+        @Schema(description = "경도(Longitude)", example = "127.0276") Double longitude,
+        @Schema(description = "새 매물 사진 URL 목록(선택). 보내면 기존 사진을 전부 교체한다. GET /properties/presigned-url로 미리 업로드 후 그 결과 URL을 담는다.")
+        List<String> newImageUrls
 ){ }

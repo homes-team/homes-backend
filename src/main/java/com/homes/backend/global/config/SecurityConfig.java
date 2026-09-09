@@ -122,7 +122,9 @@ public class SecurityConfig {
                                 "/properties/{propertyId}",
                                 "/properties/map",
                                 "/properties/surge-rankings",
-                                "/properties/*/verifications"
+                                "/properties/*/verifications",
+                                // 중개사 회원가입(계정/토큰이 아직 없는 상태)에서도 서류 이미지를 미리 업로드해야 해서 로그인 없이 허용
+                                "/properties/presigned-url"
                         ).permitAll()
 
                         // Swagger 관련 프리패스 주소 (이건 기존 yml 설정에 맞게 유지)

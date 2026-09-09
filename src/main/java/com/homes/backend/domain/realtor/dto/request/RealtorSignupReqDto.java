@@ -40,5 +40,22 @@ public record RealtorSignupReqDto(
         @Schema(description = "중개사무소 주소 (선택, 나중에 등록 가능). 위경도는 이 주소를 기반으로 서버가 자동으로 채운다.", example = "서울 강남구 역삼동 123-45")
         @Size(max = 255, message = "중개사무소 주소는 255자를 초과할 수 없습니다.")
         @Pattern(regexp = ".*\\S.*", message = "중개사무소 주소는 공백만으로 입력할 수 없습니다.")
-        String officeAddress
+        String officeAddress,
+
+        @Schema(description = "사업자등록증 이미지 URL (Presigned URL로 미리 업로드 후 전달)", example = "https://homes-duksung-images.s3.ap-northeast-2.amazonaws.com/properties/xxx.jpg")
+        @NotBlank(message = "사업자등록증 이미지는 필수입니다.")
+        @Pattern(regexp = "^https://homes-duksung-images\\.s3\\.ap-northeast-2\\.amazonaws\\.com/.+$",
+                message = "허용된 S3 저장소의 URL만 사용할 수 있습니다.")
+        String businessCertUrl,
+
+        @Schema(description = "중개사무소 등록증 이미지 URL (Presigned URL로 미리 업로드 후 전달)", example = "https://homes-duksung-images.s3.ap-northeast-2.amazonaws.com/properties/xxx.jpg")
+        @NotBlank(message = "중개사무소 등록증 이미지는 필수입니다.")
+        @Pattern(regexp = "^https://homes-duksung-images\\.s3\\.ap-northeast-2\\.amazonaws\\.com/.+$",
+                message = "허용된 S3 저장소의 URL만 사용할 수 있습니다.")
+        String agentCertUrl,
+
+        @Schema(description = "프로필 사진 URL (선택, Presigned URL로 미리 업로드 후 전달)", example = "https://homes-duksung-images.s3.ap-northeast-2.amazonaws.com/properties/xxx.jpg")
+        @Pattern(regexp = "^https://homes-duksung-images\\.s3\\.ap-northeast-2\\.amazonaws\\.com/.+$",
+                message = "허용된 S3 저장소의 URL만 사용할 수 있습니다.")
+        String profileImageUrl
 ) {}
