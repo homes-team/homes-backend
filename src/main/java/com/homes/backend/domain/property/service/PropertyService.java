@@ -12,6 +12,7 @@ import com.homes.backend.domain.user.entity.User;
 import com.homes.backend.domain.user.exception.UserErrorCode;
 import com.homes.backend.domain.user.repository.UserRepository;
 import com.homes.backend.global.exception.CustomException;
+import com.homes.backend.global.storage.S3PresignedUrlService;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.*;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ public class PropertyService {
     private final PropertyFavoriteRepository propertyFavoriteRepository;
     private final RecentViewRepository recentViewRepository;
     private final StationRepository stationRepository;
+    private final S3PresignedUrlService s3PresignedUrlService;
 
     /**
      * GPS 표준인 4326(WGS84) 기반으로 Point를 만들어주는 팩토리
@@ -103,6 +105,8 @@ public class PropertyService {
             List<String> imageUrls = reqDto.imageUrls();
 
             for (int i = 0; i < imageUrls.size(); i++) {
+                s3PresignedUrlService.validateUploadedFileSize(imageUrls.get(i));
+
                 PropertyImage propertyImage = PropertyImage.builder()
                         .imageUrl(imageUrls.get(i))
                         .isThumbnail(i == 0)
@@ -230,12 +234,14 @@ public class PropertyService {
         /*
          * 새 사진 URL이 오면 기존 사진 전체를 교체 - 클라이언트가 presigned URL로 이미 S3에 올려서 URL만 넘어온다
          */
-        if (reqDto.newImageUrls() != null && !reqDto.newImageUrls().isEmpty()) {
+        if (reqDto.newImageUrls() != null) {
             List<String> newImageUrls = reqDto.newImageUrls();
 
             property.getImages().clear();
 
             for (int i = 0; i < newImageUrls.size(); i++) {
+                s3PresignedUrlService.validateUploadedFileSize(newImageUrls.get(i));
+
                 PropertyImage propertyImage = PropertyImage.builder()
                         .imageUrl(newImageUrls.get(i))
                         .isThumbnail(i == 0)

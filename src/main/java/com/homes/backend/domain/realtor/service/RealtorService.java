@@ -23,6 +23,7 @@ import com.homes.backend.domain.user.repository.UserRepository;
 import com.homes.backend.global.exception.CustomException;
 import com.homes.backend.global.geocoding.GeocodedPoint;
 import com.homes.backend.global.geocoding.GeocodingService;
+import com.homes.backend.global.storage.S3PresignedUrlService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -51,6 +52,7 @@ public class RealtorService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final RealtorAccountWriter realtorAccountWriter;
     private final GeocodingService geocodingService;
+    private final S3PresignedUrlService s3PresignedUrlService;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public RealtorSignupResDto signUp(RealtorSignupReqDto request) {
@@ -68,6 +70,13 @@ public class RealtorService {
         // 3. 사업자등록번호 중복 검사
         if (agentRepository.existsByBusinessNum(request.businessNum())) {
             throw new CustomException(RealtorErrorCode.DUPLICATE_BUSINESS_NUM);
+        }
+
+        // 3-1. 업로드된 서류/프로필 이미지 용량 검증 (presigned PUT은 사전 크기 제한이 불가능해 업로드 후 검사)
+        s3PresignedUrlService.validateUploadedFileSize(request.businessCertUrl());
+        s3PresignedUrlService.validateUploadedFileSize(request.agentCertUrl());
+        if (request.profileImageUrl() != null) {
+            s3PresignedUrlService.validateUploadedFileSize(request.profileImageUrl());
         }
 
         // 4. 유저 계정 생성

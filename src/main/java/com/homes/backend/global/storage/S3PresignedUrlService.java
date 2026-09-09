@@ -1,11 +1,18 @@
 package com.homes.backend.global.storage;
 
+import com.homes.backend.global.exception.CustomException;
+import com.homes.backend.global.exception.GlobalErrorCode;
 import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
@@ -22,8 +29,10 @@ import java.util.UUID;
 public class S3PresignedUrlService {
 
     private static final Duration UPLOAD_URL_VALID_DURATION = Duration.ofMinutes(5);
+    private static final long MAX_UPLOAD_SIZE_BYTES = 10L * 1024 * 1024; // 10MB
 
     private final S3Presigner presigner;
+    private final S3Client s3Client;
     private final String bucket;
     private final String publicUrlPrefix;
 
@@ -35,9 +44,14 @@ public class S3PresignedUrlService {
     ) {
         this.bucket = bucket;
         this.publicUrlPrefix = "https://" + bucket + ".s3." + region + ".amazonaws.com/";
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKey, secretKey);
         this.presigner = S3Presigner.builder()
                 .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
+                .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .build();
+        this.s3Client = S3Client.builder()
+                .region(Region.of(region))
+                .credentialsProvider(StaticCredentialsProvider.create(credentials))
                 .build();
     }
 
@@ -72,8 +86,36 @@ public class S3PresignedUrlService {
         return dotIndex >= 0 ? fileName.substring(dotIndex) : "";
     }
 
+    /**
+     * 클라이언트가 presigned URL로 이미 업로드를 마친 객체의 실제 용량을 확인한다.
+     * PUT 방식은 사전에 크기를 제한할 수 없어 업로드가 끝난 뒤 검사하고, 초과 시 즉시 삭제한다.
+     */
+    public void validateUploadedFileSize(String fileUrl) {
+        if (fileUrl == null || !fileUrl.startsWith(publicUrlPrefix)) {
+            throw new CustomException(GlobalErrorCode.INVALID_INPUT);
+        }
+
+        String key = fileUrl.substring(publicUrlPrefix.length());
+
+        HeadObjectResponse headObjectResponse;
+        try {
+            headObjectResponse = s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .build());
+        } catch (NoSuchKeyException e) {
+            throw new CustomException(GlobalErrorCode.INVALID_INPUT);
+        }
+
+        if (headObjectResponse.contentLength() != null && headObjectResponse.contentLength() > MAX_UPLOAD_SIZE_BYTES) {
+            s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+            throw new CustomException(GlobalErrorCode.FILE_TOO_LARGE);
+        }
+    }
+
     @PreDestroy
     public void close() {
         presigner.close();
+        s3Client.close();
     }
 }
