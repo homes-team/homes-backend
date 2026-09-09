@@ -9,7 +9,6 @@ import com.homes.backend.global.storage.S3PresignedUrlService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -34,7 +33,7 @@ public class PropertyUploadController implements PropertyUploadControllerDocs {
     @Override
     @GetMapping("/presigned-url")
     public ApiResponse<PresignedUrlResDto> getPresignedUrl(@RequestParam String fileName, HttpServletRequest request) {
-        checkRateLimit(resolveClientIp(request));
+        checkRateLimit(request.getRemoteAddr());
 
         PresignedUploadInfo info = s3PresignedUrlService.issueUploadUrl(UPLOAD_FOLDER, fileName);
         return ApiResponse.onSuccess(PresignedUrlResDto.from(info));
@@ -51,14 +50,5 @@ public class PropertyUploadController implements PropertyUploadControllerDocs {
         if (requestCount != null && requestCount > RATE_LIMIT_MAX_REQUESTS) {
             throw new CustomException(GlobalErrorCode.TOO_MANY_REQUESTS);
         }
-    }
-
-    // 프록시/로드밸런서를 거치는 경우 실제 클라이언트 IP는 X-Forwarded-For에 담겨온다
-    private String resolveClientIp(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (StringUtils.hasText(forwardedFor)) {
-            return forwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 }
