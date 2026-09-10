@@ -1,6 +1,7 @@
 package com.homes.backend.domain.property.controller;
 
 import com.homes.backend.domain.property.dto.request.ReportCreateReqDto;
+import com.homes.backend.domain.property.dto.response.PropertyReportSummaryResDto;
 import com.homes.backend.global.response.ApiResponse;
 import com.homes.backend.global.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,5 +19,10 @@ public interface PropertyReportControllerDocs {
             @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal,
             @Parameter(description = "신고할 매물의 ID", required = true) @PathVariable("propertyId") Long propertyId,
             @RequestBody @Valid ReportCreateReqDto reqDto
+    );
+
+    @Operation(summary = "누적 신고 횟수 조회", description = "특정 매물에 몇 번의 신고가 누적되었는지, 의심 매물로 전환됐는지 확인합니다.")
+    ApiResponse<PropertyReportSummaryResDto> getReportSummary(
+            @Parameter(description = "조회할 매물의 ID", required = true) @PathVariable("propertyId") Long propertyId
     );
 }

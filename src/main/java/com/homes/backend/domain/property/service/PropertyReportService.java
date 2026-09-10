@@ -1,6 +1,7 @@
 package com.homes.backend.domain.property.service;
 
 import com.homes.backend.domain.property.dto.request.ReportCreateReqDto;
+import com.homes.backend.domain.property.dto.response.PropertyReportSummaryResDto;
 import com.homes.backend.domain.property.dto.response.ReportListRespDto;
 import com.homes.backend.domain.property.entity.Property;
 import com.homes.backend.domain.property.entity.PropertyReport;
@@ -89,5 +90,16 @@ public class PropertyReportService {
         return reportRepository.findAllByReporterId(userId).stream()
                 .map(ReportListRespDto::from)
                 .toList();
+    }
+
+    /**
+     * 특정 매물의 누적 신고 횟수 조회
+     */
+    @Transactional(readOnly = true)
+    public PropertyReportSummaryResDto getReportSummary(Long propertyId) {
+        Property property = propertyRepository.findById(propertyId)
+                .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+
+        return PropertyReportSummaryResDto.from(property);
     }
 }
