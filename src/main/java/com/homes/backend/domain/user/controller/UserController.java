@@ -7,6 +7,7 @@ import com.homes.backend.domain.property.service.PropertyService;
 import com.homes.backend.domain.property.service.RecentViewService;
 import com.homes.backend.domain.user.dto.request.*;
 import com.homes.backend.domain.user.dto.response.IdentityVerificationResDto;
+import com.homes.backend.domain.user.dto.response.UserDetailResDto;
 import com.homes.backend.domain.user.dto.response.UserProfileResDto;
 import com.homes.backend.domain.user.dto.response.UserSignupResDto;
 import com.homes.backend.domain.user.dto.response.UserUpdateProfileResDto;
@@ -210,6 +211,20 @@ public class UserController implements UserControllerDocs {
         }
 
         List<PropertyListRespDto> response = recentViewService.getMyRecentViews(userPrincipal.getId());
+        return ApiResponse.onSuccess(response);
+    }
+
+    /**
+     * 공인중개사가 사용자의 공개 상세 정보를 조회합니다.
+     *
+     * @param userId 사용자 ID
+     * @return 사용자 공개 상세 정보
+     */
+    @Override
+    @PreAuthorize("hasRole('AGENT')")
+    @GetMapping("/{userId}")
+    public ApiResponse<UserDetailResDto> getUserDetail(@PathVariable Long userId) {
+        UserDetailResDto response = userService.getUserDetail(userId);
         return ApiResponse.onSuccess(response);
     }
 

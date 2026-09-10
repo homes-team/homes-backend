@@ -3,11 +3,16 @@ package com.homes.backend.domain.property.service;
 import com.homes.backend.domain.property.dto.request.PropertyCreateReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyMapSearchReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyUpdateReqDto;
+import com.homes.backend.domain.bid.entity.Bid;
+import com.homes.backend.domain.bid.entity.BidStatus;
+import com.homes.backend.domain.bid.repository.BidRepository;
 import com.homes.backend.domain.property.dto.response.PropertyDetailRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyListRespDto;
+import com.homes.backend.domain.property.dto.response.PropertyRealtorInfoResDto;
 import com.homes.backend.domain.property.entity.*;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
 import com.homes.backend.domain.property.repository.*;
+import com.homes.backend.domain.realtor.entity.Agent;
 import com.homes.backend.domain.user.entity.User;
 import com.homes.backend.domain.user.exception.UserErrorCode;
 import com.homes.backend.domain.user.repository.UserRepository;
@@ -30,6 +35,7 @@ public class PropertyService {
     private final RecentViewRepository recentViewRepository;
     private final StationRepository stationRepository;
     private final S3PresignedUrlService s3PresignedUrlService;
+    private final BidRepository bidRepository;
 
     /**
      * GPS 표준인 4326(WGS84) 기반으로 Point를 만들어주는 팩토리
@@ -161,6 +167,35 @@ public class PropertyService {
         }
 
         return PropertyDetailRespDto.from(property);
+    }
+
+    /**
+     * 이 매물을 담당하는 중개사(입찰 수락 완료된 건)와, 그 중개사가 담당하는 다른 매물들을 조회.
+     * 아직 매칭된 중개사가 없어도 에러 없이 agent=null/빈 리스트로 응답한다 (매물 상세조회를 막지 않기 위해 분리된 API).
+     *
+     * @param propertyId 매물 ID
+     * @return 담당 중개사 및 다른 매물 정보
+     */
+    @Transactional(readOnly = true)
+    public PropertyRealtorInfoResDto getPropertyRealtorInfo(Long propertyId) {
+        if (!propertyRepository.existsById(propertyId)) {
+            throw new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND);
+        }
+
+        return bidRepository.findByPropertyIdAndStatus(propertyId, BidStatus.ACCEPTED)
+                .map(acceptedBid -> {
+                    Agent agent = acceptedBid.getAgent();
+
+                    List<PropertyListRespDto> otherProperties = bidRepository
+                            .findOtherAcceptedBidsByAgent(agent.getId(), BidStatus.ACCEPTED, propertyId, PropertyStatus.DELETED)
+                            .stream()
+                            .map(Bid::getProperty)
+                            .map(PropertyListRespDto::from)
+                            .toList();
+
+                    return PropertyRealtorInfoResDto.of(agent, otherProperties);
+                })
+                .orElseGet(PropertyRealtorInfoResDto::empty);
     }
 
     /**
