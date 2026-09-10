@@ -93,6 +93,9 @@ public class UserService {
     /**
      * 공인중개사가 매물 등록자(유저)의 평판/정보를 확인하기 위한 상세 조회.
      * 비밀번호/이메일/전화번호 등 개인정보는 노출하지 않는다.
+     *
+     * @param userId 사용자 ID
+     * @return 사용자 공개 상세 정보
      */
     public UserDetailResDto getUserDetail(Long userId) {
         User user = userRepository.findById(userId)

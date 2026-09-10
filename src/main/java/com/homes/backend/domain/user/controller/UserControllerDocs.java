@@ -135,6 +135,12 @@ public interface UserControllerDocs {
             @RequestHeader("Authorization") String accessToken
     );
 
+    /**
+     * 공인중개사가 사용자의 공개 상세 정보를 조회합니다.
+     *
+     * @param userId 사용자 ID
+     * @return 사용자 공개 상세 정보
+     */
     @Operation(summary = "유저 상세보기 (공인중개사 전용)", description = "공인중개사가 매물 등록자의 평판(실명인증 여부, 리뷰 평점 등)을 확인합니다. " +
             "이메일/전화번호 등 개인정보는 노출하지 않습니다.")
     @GetMapping("/{userId}")

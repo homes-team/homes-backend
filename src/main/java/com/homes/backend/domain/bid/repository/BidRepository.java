@@ -21,12 +21,22 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
 
     /**
      * 이 매물을 "담당"하는 중개사 조회 - 수락된(ACCEPTED) 입찰은 매물당 최대 1건이라는 전제
+     *
+     * @param propertyId 매물 ID
+     * @param status 조회할 입찰 상태
+     * @return 조건에 맞는 입찰, 없으면 빈 값
      */
     @EntityGraph(attributePaths = {"agent"})
     Optional<Bid> findByPropertyIdAndStatus(Long propertyId, BidStatus status);
 
     /**
      * 담당 중개사의 다른 매물 조회용 - 현재 매물은 제외하고, 삭제된 매물도 제외
+     *
+     * @param agentId 중개사 ID
+     * @param status 조회할 입찰 상태
+     * @param excludePropertyId 결과에서 제외할 현재 매물 ID
+     * @param excludedPropertyStatus 결과에서 제외할 매물 상태
+     * @return 조건에 맞는 입찰 목록
      */
     @Query("SELECT b FROM Bid b JOIN FETCH b.property p " +
             "WHERE b.agent.id = :agentId AND b.status = :status " +

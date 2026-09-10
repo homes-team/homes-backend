@@ -172,6 +172,9 @@ public class PropertyService {
     /**
      * 이 매물을 담당하는 중개사(입찰 수락 완료된 건)와, 그 중개사가 담당하는 다른 매물들을 조회.
      * 아직 매칭된 중개사가 없어도 에러 없이 agent=null/빈 리스트로 응답한다 (매물 상세조회를 막지 않기 위해 분리된 API).
+     *
+     * @param propertyId 매물 ID
+     * @return 담당 중개사 및 다른 매물 정보
      */
     @Transactional(readOnly = true)
     public PropertyRealtorInfoResDto getPropertyRealtorInfo(Long propertyId) {

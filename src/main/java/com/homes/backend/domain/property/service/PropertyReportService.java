@@ -94,6 +94,9 @@ public class PropertyReportService {
 
     /**
      * 특정 매물의 누적 신고 횟수 조회
+     *
+     * @param propertyId 매물 ID
+     * @return 매물 신고 요약
      */
     @Transactional(readOnly = true)
     public PropertyReportSummaryResDto getReportSummary(Long propertyId) {

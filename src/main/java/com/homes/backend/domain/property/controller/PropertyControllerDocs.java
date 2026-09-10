@@ -38,6 +38,12 @@ public interface PropertyControllerDocs {
             @Parameter(hidden=true) @AuthenticationPrincipal UserPrincipal userPrincipal
     );
 
+    /**
+     * 매물 담당 중개사와 해당 중개사의 다른 매물을 조회합니다.
+     *
+     * @param propertyId 매물 ID
+     * @return 담당 중개사 및 다른 매물 정보
+     */
     @Operation(summary = "담당 중개사 및 타 매물 조회", description = "이 매물의 입찰을 수락한(담당) 중개사 정보와, 그 중개사가 담당하는 다른 매물 목록을 조회합니다. " +
             "아직 매칭된 중개사가 없으면 agent는 null, otherProperties는 빈 배열로 응답합니다 (매물 상세 조회와는 별도 API).")
     ApiResponse<PropertyRealtorInfoResDto> getPropertyRealtorInfo(@PathVariable Long propertyId);

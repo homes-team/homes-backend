@@ -33,6 +33,12 @@ public class PropertyReportController implements PropertyReportControllerDocs{
         return ApiResponse.onSuccess(null);
     }
 
+    /**
+     * 특정 매물의 누적 신고 횟수와 의심 매물 여부를 조회합니다.
+     *
+     * @param propertyId 매물 ID
+     * @return 매물 신고 요약
+     */
     @Override
     @GetMapping("/{propertyId}/reports")
     public ApiResponse<PropertyReportSummaryResDto> getReportSummary(@PathVariable Long propertyId) {

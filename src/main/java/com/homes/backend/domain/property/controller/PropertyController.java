@@ -78,6 +78,12 @@ public class PropertyController implements PropertyControllerDocs {
         return ApiResponse.onSuccess(response);
     }
 
+    /**
+     * 매물 담당 중개사와 해당 중개사의 다른 매물을 조회합니다.
+     *
+     * @param propertyId 매물 ID
+     * @return 담당 중개사 및 다른 매물 정보
+     */
     @Override
     @GetMapping("/{propertyId}/realtors")
     public ApiResponse<PropertyRealtorInfoResDto> getPropertyRealtorInfo(@PathVariable Long propertyId) {

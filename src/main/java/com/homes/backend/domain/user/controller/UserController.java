@@ -214,6 +214,12 @@ public class UserController implements UserControllerDocs {
         return ApiResponse.onSuccess(response);
     }
 
+    /**
+     * 공인중개사가 사용자의 공개 상세 정보를 조회합니다.
+     *
+     * @param userId 사용자 ID
+     * @return 사용자 공개 상세 정보
+     */
     @Override
     @PreAuthorize("hasRole('AGENT')")
     @GetMapping("/{userId}")

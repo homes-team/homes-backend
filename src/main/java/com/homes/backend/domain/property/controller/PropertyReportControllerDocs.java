@@ -21,6 +21,12 @@ public interface PropertyReportControllerDocs {
             @RequestBody @Valid ReportCreateReqDto reqDto
     );
 
+    /**
+     * 특정 매물의 누적 신고 횟수와 의심 매물 여부를 조회합니다.
+     *
+     * @param propertyId 매물 ID
+     * @return 매물 신고 요약
+     */
     @Operation(summary = "누적 신고 횟수 조회", description = "특정 매물에 몇 번의 신고가 누적되었는지, 의심 매물로 전환됐는지 확인합니다.")
     ApiResponse<PropertyReportSummaryResDto> getReportSummary(
             @Parameter(description = "조회할 매물의 ID", required = true) @PathVariable("propertyId") Long propertyId
