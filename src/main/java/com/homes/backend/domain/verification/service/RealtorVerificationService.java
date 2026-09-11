@@ -13,7 +13,7 @@ import com.homes.backend.domain.verification.entity.VerificationStatus;
 import com.homes.backend.domain.verification.exception.VerificationErrorCode;
 import com.homes.backend.domain.verification.repository.RealtorVerificationRepository;
 import com.homes.backend.global.exception.CustomException;
-import com.homes.backend.global.util.ExifData; // 🌟 독립시킨 ExifData 임포트
+import com.homes.backend.global.util.ExifData;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
@@ -62,15 +63,13 @@ public class RealtorVerificationService {
             throw new CustomException(VerificationErrorCode.EXIF_TIME_NOT_FOUND);
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Seoul"));
+
         LocalDateTime oneHourAgo = now.minusHours(1);
         LocalDateTime fiveMinsLater = now.plusMinutes(5); // 스마트폰 기기 간 시간 오차 5분 허용
 
         if (exifData.originalDate().isBefore(oneHourAgo)) {
             throw new CustomException(VerificationErrorCode.EXIF_TIME_EXPIRED);
-        }
-        if (exifData.originalDate().isAfter(fiveMinsLater)) {
-            throw new CustomException(VerificationErrorCode.EXIF_TIME_FUTURE);
         }
 
         // --- 사진에 기록된 GPS 기반 거리 검증 ---
