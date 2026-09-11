@@ -13,6 +13,7 @@ import java.net.URL;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.TimeZone;
 
 @Slf4j
 @Component
@@ -53,9 +54,9 @@ public class ExifExtractor {
                 LocalDateTime originalDate = null;
 
                 if (subIFDDirectory != null) {
-                    Date date = subIFDDirectory.getDate(ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL);
+                    Date date = subIFDDirectory.getDateOriginal(TimeZone.getTimeZone("Asia/Seoul"));
                     if (date != null) {
-                        originalDate = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+                        originalDate = date.toInstant().atZone(ZoneId.of("Asia/Seoul")).toLocalDateTime();
                     }
                 }
 

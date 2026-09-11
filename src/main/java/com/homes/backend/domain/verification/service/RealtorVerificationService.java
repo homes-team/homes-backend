@@ -57,13 +57,20 @@ public class RealtorVerificationService {
             throw new CustomException(VerificationErrorCode.ALREADY_VERIFIED);
         }
 
-        // --- 사진 촬영 시각 검증 ---
+        // --- 촬영 시각 검증 (과거 1시간 ~ 미래 5분 허용) ---
         if (exifData.originalDate() == null) {
             throw new CustomException(VerificationErrorCode.EXIF_TIME_NOT_FOUND);
         }
-        LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oneHourAgo = now.minusHours(1);
+        LocalDateTime fiveMinsLater = now.plusMinutes(5); // 스마트폰 기기 간 시간 오차 5분 허용
+
         if (exifData.originalDate().isBefore(oneHourAgo)) {
             throw new CustomException(VerificationErrorCode.EXIF_TIME_EXPIRED);
+        }
+        if (exifData.originalDate().isAfter(fiveMinsLater)) {
+            throw new CustomException(VerificationErrorCode.EXIF_TIME_FUTURE);
         }
 
         // --- 사진에 기록된 GPS 기반 거리 검증 ---
@@ -79,6 +86,8 @@ public class RealtorVerificationService {
         Point realtorLocation = geometryFactory.createPoint(new Coordinate(reqDto.longitude(), reqDto.latitude()));
         Double distanceMeter = propertyRepository.calculateDistanceToProperty(propertyId, realtorLocation);
 
+        // TODO: EXIF 데이터는 위조가 가능하므로(CWE-345), 추후 Google Vision API(역이미지 검색)를 도입하여
+        // 2차 검증을 수행하거나 MANUAL_REVIEW 상태로 전환하는 로직을 고도화할 예정.
         VerificationStatus status = (distanceMeter != null && distanceMeter <= MAX_ALLOWED_DISTANCE_METERS)
                 ? VerificationStatus.APPROVED
                 : VerificationStatus.REJECTED;
