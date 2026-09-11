@@ -13,6 +13,7 @@ import com.homes.backend.domain.verification.entity.VerificationStatus;
 import com.homes.backend.domain.verification.exception.VerificationErrorCode;
 import com.homes.backend.domain.verification.repository.RealtorVerificationRepository;
 import com.homes.backend.global.exception.CustomException;
+import com.homes.backend.global.util.ExifData;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -20,6 +21,9 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
@@ -30,46 +34,63 @@ public class RealtorVerificationService {
     private final RealtorVerificationRepository realtorVerificationRepository;
 
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
-    private static final double MAX_ALLOWED_DISTANCE_METERS = 100.0; // 허용 오차 반경 100m
+    private static final double MAX_ALLOWED_DISTANCE_METERS = 100.0;
 
-    /**
-     * 중개사 현장 인증 요청
-     */
     @Transactional
-    public VerificationStatus verifyOnSite(Long propertyId, Long userId, RealtorVerificationReqDto reqDto) {
+    public VerificationStatus verifyOnSite(Long propertyId, Long userId, RealtorVerificationReqDto reqDto, ExifData exifData) {
         Property property = propertyRepository.findByIdWithPessimisticLock(propertyId)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
 
         Agent agent = agentRepository.findByUserId(userId)
                 .orElseThrow(() -> new CustomException(RealtorErrorCode.AGENT_NOT_FOUND));
 
-        // 미승인 중개사의 접근 차단
+        // 공인중개사가 승인 안된 사람일 시 오류 처리
         if (!agent.isVerified()) {
             throw new CustomException(RealtorErrorCode.UNAPPROVED_AGENT);
         }
 
-        // 이미 승인된 매물인지 확인하여 중복 방지
         RealtorVerification latestVerification = realtorVerificationRepository
                 .findTopByPropertyIdOrderByRequestedAtDesc(propertyId)
                 .orElse(null);
 
-        // 이미 승인(APPROVED) 상태라면 새로 만든 에러 발생
+        // 미승인된 매물만 인증 처리
         if (latestVerification != null && latestVerification.getStatus() == VerificationStatus.APPROVED) {
             throw new CustomException(VerificationErrorCode.ALREADY_VERIFIED);
         }
 
-        // 중개사가 현재 서 있는 GPS 위치 Point 생성 (경도, 위도 순서)
-        Point realtorLocation = geometryFactory.createPoint(new Coordinate(reqDto.longitude(), reqDto.latitude()));
+        // --- 촬영 시각 검증 (과거 1시간 ~ 미래 5분 허용) ---
+        if (exifData.originalDate() == null) {
+            throw new CustomException(VerificationErrorCode.EXIF_TIME_NOT_FOUND);
+        }
 
-        // PostGIS 네이티브 쿼리를 이용해 실제 매물 위치와의 거리 차이(m) 계산
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Seoul"));
+
+        LocalDateTime oneHourAgo = now.minusHours(1);
+        LocalDateTime fiveMinsLater = now.plusMinutes(5); // 스마트폰 기기 간 시간 오차 5분 허용
+
+        if (exifData.originalDate().isBefore(oneHourAgo)) {
+            throw new CustomException(VerificationErrorCode.EXIF_TIME_EXPIRED);
+        }
+
+        // --- 사진에 기록된 GPS 기반 거리 검증 ---
+        Point photoLocation = geometryFactory.createPoint(new Coordinate(exifData.longitude(), exifData.latitude()));
+        Double photoDistance = propertyRepository.calculateDistanceToProperty(propertyId, photoLocation);
+
+        // 100m 초과일시 에러
+        if (photoDistance == null || photoDistance > MAX_ALLOWED_DISTANCE_METERS) {
+            throw new CustomException(VerificationErrorCode.EXIF_GPS_NOT_MATCH);
+        }
+
+        // --- 중개사가 현재 서 있는 위치(휴대폰 GPS) 기반 거리 계산 ---
+        Point realtorLocation = geometryFactory.createPoint(new Coordinate(reqDto.longitude(), reqDto.latitude()));
         Double distanceMeter = propertyRepository.calculateDistanceToProperty(propertyId, realtorLocation);
 
-        // 거리가 100m 이내면 APPROVED, 넘어가면 REJECTED
+        // TODO: EXIF 데이터는 위조가 가능하므로(CWE-345), 추후 Google Vision API(역이미지 검색)를 도입하여
+        // 2차 검증을 수행하거나 MANUAL_REVIEW 상태로 전환하는 로직을 고도화할 예정.
         VerificationStatus status = (distanceMeter != null && distanceMeter <= MAX_ALLOWED_DISTANCE_METERS)
                 ? VerificationStatus.APPROVED
                 : VerificationStatus.REJECTED;
 
-        // 인증 내역 DB 저장
         RealtorVerification verification = RealtorVerification.builder()
                 .property(property)
                 .agent(agent)
@@ -84,12 +105,8 @@ public class RealtorVerificationService {
         return status;
     }
 
-    /**
-     * 매물 인증 상태 조회
-     */
     @Transactional(readOnly = true)
     public VerificationStatusRespDto getVerificationStatus(Long propertyId) {
-        // 매물이 실제로 존재하는지 먼저 검증 (없으면 404 에러 발생)
         if (!propertyRepository.existsById(propertyId)) {
             throw new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND);
         }
@@ -98,14 +115,9 @@ public class RealtorVerificationService {
                 .findTopByPropertyIdOrderByRequestedAtDesc(propertyId)
                 .orElse(null);
 
-        // 연산 없이 DB에 저장된 상태값만 그대로 반환하므로 과부하 0%
         boolean isRealtorVerified = (latestVerification != null && latestVerification.getStatus() == VerificationStatus.APPROVED);
         VerificationStatus realtorStatus = (latestVerification != null) ? latestVerification.getStatus() : null;
 
-        return new VerificationStatusRespDto(
-                false,              // isOwnerVerified (현재는 무조건 false)
-                isRealtorVerified,  // isRealtorVerified
-                realtorStatus       // realtorStatus
-        );
+        return new VerificationStatusRespDto(false, isRealtorVerified, realtorStatus);
     }
 }
