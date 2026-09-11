@@ -38,7 +38,12 @@ abstract class PublicDataClientSupport {
         if (!resultCode.isBlank() && !"00".equals(resultCode) && !"000".equals(resultCode)) {
             throw new IllegalStateException("공공데이터 응답 오류: " + resultCode);
         }
-        JsonNode item = root.path("response").path("body").path("items").path("item");
+        JsonNode body = root.path("response").path("body");
+        JsonNode items = body.path("items");
+        JsonNode item = items.isArray() ? items : items.path("item");
+        if (item.isMissingNode() || item.isNull()) {
+            item = body.path("item");
+        }
         if (item.isArray()) {
             return objectMapper.convertValue(item, objectMapper.getTypeFactory().constructCollectionType(List.class, JsonNode.class));
         }

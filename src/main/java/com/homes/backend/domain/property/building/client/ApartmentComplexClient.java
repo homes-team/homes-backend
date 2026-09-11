@@ -21,7 +21,7 @@ public class ApartmentComplexClient extends PublicDataClientSupport {
     }
 
     public Optional<ApartmentComplex> findByAddress(ResolvedAddress address) {
-        URI uri = UriComponentsBuilder.fromHttpUrl(properties.getApartmentListUrl() + "/getLegaldongAptList")
+        URI uri = UriComponentsBuilder.fromHttpUrl(properties.getApartmentListUrl() + "/getLegaldongAptList4")
                 .queryParam("serviceKey", serviceKey())
                 .queryParam("bjdCode", address.legalDongCode())
                 .queryParam("numOfRows", 100)
@@ -45,7 +45,7 @@ public class ApartmentComplexClient extends PublicDataClientSupport {
         return new ApartmentComplex(
                 text(item, "kaptCode"),
                 text(item, "kaptName"),
-                text(item, "doroJuso", "as1", "address")
+                joinAddress(item)
         );
     }
 
@@ -53,10 +53,35 @@ public class ApartmentComplexClient extends PublicDataClientSupport {
         int score = 0;
         String target = normalize(address.normalizedAddress());
         String candidate = normalize(complex.address());
-        if (!target.isBlank() && !candidate.isBlank() && (target.contains(candidate) || candidate.contains(target))) score += 10;
+        if (!target.isBlank() && target.equals(candidate)) score += 10;
         if (address.buildingName() != null && complex.name() != null
-                && normalize(address.buildingName()).equals(normalize(complex.name()))) score += 5;
+                && matchesBuildingName(address.buildingName(), complex.name())) score += 20;
         return score;
+    }
+
+    private String joinAddress(JsonNode item) {
+        StringBuilder address = new StringBuilder();
+        for (String field : new String[]{"as1", "as2", "as3", "as4"}) {
+            String part = text(item, field);
+            if (part != null) {
+                if (!address.isEmpty()) address.append(' ');
+                address.append(part);
+            }
+        }
+        return address.isEmpty() ? text(item, "doroJuso", "address") : address.toString();
+    }
+
+    private boolean matchesBuildingName(String target, String candidate) {
+        String normalizedTarget = normalizeBuildingName(target);
+        String normalizedCandidate = normalizeBuildingName(candidate);
+        return !normalizedTarget.isBlank() && !normalizedCandidate.isBlank()
+                && (normalizedTarget.equals(normalizedCandidate)
+                || normalizedTarget.contains(normalizedCandidate)
+                || normalizedCandidate.contains(normalizedTarget));
+    }
+
+    private static String normalizeBuildingName(String value) {
+        return normalize(value).replace("아파트", "");
     }
 
     private static String normalize(String value) {
