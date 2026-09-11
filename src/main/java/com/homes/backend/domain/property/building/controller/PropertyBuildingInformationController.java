@@ -16,12 +16,18 @@ import org.springframework.web.bind.annotation.*;
 public class PropertyBuildingInformationController implements PropertyBuildingInformationControllerDocs {
     private final PropertyBuildingInformationService service;
 
+    /**
+     * Returns the most recently collected building information for a property.
+     */
     @Override
     @GetMapping
     public ApiResponse<BuildingInformationRespDto> get(@PathVariable Long propertyId) {
         return ApiResponse.onSuccess(service.get(propertyId));
     }
 
+    /**
+     * Resolves and refreshes building information after verifying the property owner.
+     */
     @Override
     @PostMapping("/resolve")
     public ApiResponse<BuildingInformationRespDto> resolve(

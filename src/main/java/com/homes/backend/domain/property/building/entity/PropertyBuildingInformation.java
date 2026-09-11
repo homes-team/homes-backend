@@ -59,11 +59,17 @@ public class PropertyBuildingInformation {
     @Column(nullable = false)
     private LocalDateTime collectedAt;
 
+    /**
+     * Associates a new building-information record with its property.
+     */
     public PropertyBuildingInformation(Property property) {
         this.property = property;
         this.propertyId = property.getId();
     }
 
+    /**
+     * Replaces enrichment fields with the latest building-register and K-apt data.
+     */
     public void refresh(ResolvedAddress address, BuildingRegisterTitle register, BuildingRegisterRecap recap,
                         ApartmentComplex complex, ApartmentBasicInformation apartment) {
         normalizedAddress = address.normalizedAddress();
@@ -96,6 +102,9 @@ public class PropertyBuildingInformation {
         collectedAt = LocalDateTime.now();
     }
 
+    /**
+     * Returns the first non-null value in source-priority order.
+     */
     @SafeVarargs
     private static <T> T first(T... candidates) {
         for (T candidate : candidates) {

@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 @Tag(name = "매물 건물정보 API", description = "공공데이터로 매물의 건물정보를 수집하고 조회합니다.")
 public interface PropertyBuildingInformationControllerDocs {
+    /**
+     * Documents the endpoint that returns a property's stored building information.
+     */
     @Operation(summary = "매물 건물정보 조회", description = "저장된 건축물대장·K-apt 건물정보를 조회합니다. 아직 수집하지 않은 매물은 NOT_COLLECTED 상태와 누락 필드를 반환합니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공", useReturnTypeSchema = true),
@@ -24,6 +27,9 @@ public interface PropertyBuildingInformationControllerDocs {
             @Parameter(description = "매물 ID", example = "1", required = true) @PathVariable Long propertyId
     );
 
+    /**
+     * Documents the owner-only endpoint that collects and refreshes building information.
+     */
     @Operation(summary = "매물 건물정보 수집·갱신", description = "매물 주소를 법정동·지번으로 해석한 뒤 건축물대장 표제부·총괄표제부와 K-apt 단지·기본정보를 수집합니다. 매물 소유자만 실행할 수 있습니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수집 또는 갱신 성공", useReturnTypeSchema = true),

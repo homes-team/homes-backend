@@ -21,6 +21,9 @@ class BuildingRegisterClientTest {
     private MockRestServiceServer server;
     private ResolvedAddress address;
 
+    /**
+     * Creates a client and address fixture for each provider-response test.
+     */
     @BeforeEach
     void setUp() {
         PublicDataApiProperties properties = new PublicDataApiProperties();
@@ -32,6 +35,9 @@ class BuildingRegisterClientTest {
                 "1132010600", "11320", "10600", "0", "0123", "0004", null);
     }
 
+    /**
+     * Verifies main-building selection and zero household handling.
+     */
     @Test
     void selectsMainBuildingByOfficialCodeAndTreatsZeroHouseholdsAsMissing() {
         server.expect(once(), requestTo("https://example.test/BldRgstHubService/getBrTitleInfo?serviceKey=encoded/key%3D%3D&sigunguCd=11320&bjdongCd=10600&platGbCd=0&bun=0123&ji=0004&numOfRows=100&pageNo=1&_type=json"))
@@ -51,6 +57,9 @@ class BuildingRegisterClientTest {
         server.verify();
     }
 
+    /**
+     * Verifies that recap-title totals are mapped to complex-level information.
+     */
     @Test
     void readsComplexTotalsFromRecapTitle() {
         server.expect(once(), requestTo("https://example.test/BldRgstHubService/getBrRecapTitleInfo?serviceKey=encoded/key%3D%3D&sigunguCd=11320&bjdongCd=10600&platGbCd=0&bun=0123&ji=0004&numOfRows=100&pageNo=1&_type=json"))
@@ -73,6 +82,9 @@ class BuildingRegisterClientTest {
         server.verify();
     }
 
+    /**
+     * Verifies that a failed optional recap lookup does not fail the enrichment flow.
+     */
     @Test
     void skipsOptionalRecapEnrichmentWhenProviderReturnsAnError() {
         server.expect(once(), requestTo("https://example.test/BldRgstHubService/getBrRecapTitleInfo?serviceKey=encoded/key%3D%3D&sigunguCd=11320&bjdongCd=10600&platGbCd=0&bun=0123&ji=0004&numOfRows=100&pageNo=1&_type=json"))

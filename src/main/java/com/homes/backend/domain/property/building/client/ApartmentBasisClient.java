@@ -17,10 +17,16 @@ import java.util.Optional;
 @Slf4j
 @Component
 public class ApartmentBasisClient extends PublicDataClientSupport {
+    /**
+     * Creates a client for the K-apt complex basic-information endpoint.
+     */
     public ApartmentBasisClient(PublicDataApiProperties properties, ObjectMapper objectMapper) {
         super(properties, objectMapper);
     }
 
+    /**
+     * Retrieves the basic information for the supplied K-apt complex code.
+     */
     public Optional<ApartmentBasicInformation> findBasicInformation(String kaptCode) {
         URI uri = UriComponentsBuilder.fromHttpUrl(properties.getApartmentBasisUrl() + "/getAphusBassInfoV5")
                 .queryParam("serviceKey", serviceKey())
@@ -36,6 +42,9 @@ public class ApartmentBasisClient extends PublicDataClientSupport {
         }
     }
 
+    /**
+     * Maps a K-apt response item to the fields used for building enrichment.
+     */
     private ApartmentBasicInformation map(JsonNode item) {
         return new ApartmentBasicInformation(
                 text(item, "kaptCode"), text(item, "kaptName"), text(item, "doroJuso", "kaptAddr"),
@@ -45,6 +54,9 @@ public class ApartmentBasisClient extends PublicDataClientSupport {
         );
     }
 
+    /**
+     * Parses K-apt approval dates in compact or separator-delimited form.
+     */
     static LocalDate parseDate(String value) {
         if (value == null) return null;
         String digits = value.replaceAll("[^0-9]", "");

@@ -101,6 +101,9 @@ public class GeocodingService {
         }
     }
 
+    /**
+     * Formats a lot-number component as the four digits expected by the building register.
+     */
     static String padLotNumber(String value) {
         if (!StringUtils.hasText(value)) {
             return "0000";

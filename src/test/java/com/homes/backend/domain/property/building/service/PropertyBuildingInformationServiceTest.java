@@ -34,12 +34,18 @@ class PropertyBuildingInformationServiceTest {
 
     private PropertyBuildingInformationService service;
 
+    /**
+     * Creates the service with its mocked enrichment collaborators.
+     */
     @BeforeEach
     void setUp() {
         service = new PropertyBuildingInformationService(propertyRepository, informationRepository, geocodingService,
                 buildingRegisterClient, apartmentComplexClient, apartmentBasisClient);
     }
 
+    /**
+     * Verifies that resolved building-register data is persisted and returned.
+     */
     @Test
     void resolvesAndStoresBuildingRegisterInformation() {
         ResolvedAddress address = new ResolvedAddress("서울특별시 도봉구 방학동 123-4", 37.66, 127.04,

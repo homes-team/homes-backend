@@ -30,12 +30,18 @@ public record BuildingInformationRespDto(
         @Schema(description = "마지막 수집 시각", example = "2026-09-11T16:30:00") LocalDateTime collectedAt,
         @Schema(description = "추가 수집이 필요한 필드명", example = "[\"kaptCode\"]") List<String> missingFields
 ) {
+    /**
+     * Creates the response returned before any building information has been collected.
+     */
     public static BuildingInformationRespDto notCollected(Long propertyId) {
         return new BuildingInformationRespDto(propertyId, "NOT_COLLECTED", null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null,
                 List.of("buildingYear", "buildingRegisterId", "householdCount"));
     }
 
+    /**
+     * Maps persisted building information to its API response representation.
+     */
     public static BuildingInformationRespDto from(PropertyBuildingInformation information) {
         List<String> missing = new ArrayList<>();
         if (information.getBuildingYear() == null) missing.add("buildingYear");

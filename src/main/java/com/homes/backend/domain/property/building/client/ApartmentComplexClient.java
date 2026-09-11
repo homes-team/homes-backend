@@ -16,10 +16,16 @@ import java.util.Optional;
 @Slf4j
 @Component
 public class ApartmentComplexClient extends PublicDataClientSupport {
+    /**
+     * Creates a client for the K-apt complex-list endpoint.
+     */
     public ApartmentComplexClient(PublicDataApiProperties properties, ObjectMapper objectMapper) {
         super(properties, objectMapper);
     }
 
+    /**
+     * Finds the best K-apt complex that matches the resolved property address.
+     */
     public Optional<ApartmentComplex> findByAddress(ResolvedAddress address) {
         URI uri = UriComponentsBuilder.fromHttpUrl(properties.getApartmentListUrl() + "/getLegaldongAptList4")
                 .queryParam("serviceKey", serviceKey())
@@ -41,6 +47,9 @@ public class ApartmentComplexClient extends PublicDataClientSupport {
         }
     }
 
+    /**
+     * Maps a complex-list response item to a candidate complex.
+     */
     private ApartmentComplex map(JsonNode item) {
         return new ApartmentComplex(
                 text(item, "kaptCode"),
@@ -49,6 +58,9 @@ public class ApartmentComplexClient extends PublicDataClientSupport {
         );
     }
 
+    /**
+     * Scores an address candidate, favoring exact addresses and matching building names.
+     */
     private int matchScore(ApartmentComplex complex, ResolvedAddress address) {
         int score = 0;
         String target = normalize(address.normalizedAddress());
@@ -59,6 +71,9 @@ public class ApartmentComplexClient extends PublicDataClientSupport {
         return score;
     }
 
+    /**
+     * Joins the address fragments returned by the K-apt list API.
+     */
     private String joinAddress(JsonNode item) {
         StringBuilder address = new StringBuilder();
         for (String field : new String[]{"as1", "as2", "as3", "as4"}) {
@@ -71,6 +86,9 @@ public class ApartmentComplexClient extends PublicDataClientSupport {
         return address.isEmpty() ? text(item, "doroJuso", "address") : address.toString();
     }
 
+    /**
+     * Determines whether two apartment names describe the same complex.
+     */
     private boolean matchesBuildingName(String target, String candidate) {
         String normalizedTarget = normalizeBuildingName(target);
         String normalizedCandidate = normalizeBuildingName(candidate);
@@ -80,10 +98,16 @@ public class ApartmentComplexClient extends PublicDataClientSupport {
                 || normalizedCandidate.contains(normalizedTarget));
     }
 
+    /**
+     * Normalizes an apartment name while ignoring its common suffix.
+     */
     private static String normalizeBuildingName(String value) {
         return normalize(value).replace("아파트", "");
     }
 
+    /**
+     * Normalizes address and name text for deterministic matching.
+     */
     private static String normalize(String value) {
         return value == null ? "" : value.replaceAll("[\\s(),]", "").replace("서울시", "서울특별시");
     }

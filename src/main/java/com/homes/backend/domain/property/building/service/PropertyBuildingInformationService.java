@@ -24,6 +24,9 @@ public class PropertyBuildingInformationService {
     private final ApartmentComplexClient apartmentComplexClient;
     private final ApartmentBasisClient apartmentBasisClient;
 
+    /**
+     * Returns stored building information or the explicit not-collected response.
+     */
     @Transactional(readOnly = true)
     public BuildingInformationRespDto get(Long propertyId) {
         ensurePropertyExists(propertyId);
@@ -32,6 +35,9 @@ public class PropertyBuildingInformationService {
                 .orElseGet(() -> BuildingInformationRespDto.notCollected(propertyId));
     }
 
+    /**
+     * Collects and persists building information when requested by the property owner.
+     */
     @Transactional
     public BuildingInformationRespDto resolve(Long propertyId, Long userId) {
         Property property = ensurePropertyExists(propertyId);
@@ -55,6 +61,9 @@ public class PropertyBuildingInformationService {
         return BuildingInformationRespDto.from(informationRepository.save(information));
     }
 
+    /**
+     * Loads the requested property or raises the domain-specific not-found error.
+     */
     private Property ensurePropertyExists(Long propertyId) {
         return propertyRepository.findById(propertyId)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));

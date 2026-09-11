@@ -17,6 +17,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class ApartmentPublicDataClientTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * Verifies that a versioned list response matches a complex by building name.
+     */
     @Test
     void readsVersionedApartmentListArrayAndMatchesByBuildingName() {
         PublicDataApiProperties properties = properties();
@@ -41,6 +44,9 @@ class ApartmentPublicDataClientTest {
         server.verify();
     }
 
+    /**
+     * Verifies that an unmatched complex is not selected from an address-only result.
+     */
     @Test
     void doesNotSelectArbitraryComplexWithoutBuildingNameMatch() {
         PublicDataApiProperties properties = properties();
@@ -60,6 +66,9 @@ class ApartmentPublicDataClientTest {
         server.verify();
     }
 
+    /**
+     * Verifies that a singleton basic-information response body is parsed correctly.
+     */
     @Test
     void readsApartmentBasisBodyItem() {
         PublicDataApiProperties properties = properties();
@@ -84,6 +93,9 @@ class ApartmentPublicDataClientTest {
         server.verify();
     }
 
+    /**
+     * Creates the isolated public-data client configuration used by these tests.
+     */
     private PublicDataApiProperties properties() {
         PublicDataApiProperties properties = new PublicDataApiProperties();
         properties.setServiceKey("test-key");

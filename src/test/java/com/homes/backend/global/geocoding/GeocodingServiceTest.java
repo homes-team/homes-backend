@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class GeocodingServiceTest {
+    /**
+     * Verifies that building-register lot numbers are normalized to four digits.
+     */
     @Test
     void padsBuildingRegisterLotNumbers() {
         assertThat(GeocodingService.padLotNumber("123")).isEqualTo("0123");
