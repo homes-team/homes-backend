@@ -5,6 +5,7 @@ import com.homes.backend.domain.property.dto.request.PropertyMapSearchReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyUpdateReqDto;
 import com.homes.backend.domain.property.dto.response.PropertyDetailRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyListRespDto;
+import com.homes.backend.domain.property.dto.response.PropertyRealtorInfoResDto;
 import com.homes.backend.domain.property.service.PropertyRankingService;
 import com.homes.backend.domain.property.service.PropertyService;
 import com.homes.backend.domain.property.service.RecentViewService;
@@ -74,6 +75,19 @@ public class PropertyController implements PropertyControllerDocs {
             // Redis 장애가 메인 상세 조회를 막지 않도록 방어
         }
 
+        return ApiResponse.onSuccess(response);
+    }
+
+    /**
+     * 매물 담당 중개사와 해당 중개사의 다른 매물을 조회합니다.
+     *
+     * @param propertyId 매물 ID
+     * @return 담당 중개사 및 다른 매물 정보
+     */
+    @Override
+    @GetMapping("/{propertyId}/realtors")
+    public ApiResponse<PropertyRealtorInfoResDto> getPropertyRealtorInfo(@PathVariable Long propertyId) {
+        PropertyRealtorInfoResDto response = propertyService.getPropertyRealtorInfo(propertyId);
         return ApiResponse.onSuccess(response);
     }
 

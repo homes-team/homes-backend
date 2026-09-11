@@ -10,6 +10,7 @@ import com.homes.backend.domain.user.dto.request.UserLoginReqDto;
 import com.homes.backend.domain.user.dto.request.UserUpdatePasswordReqDto;
 import com.homes.backend.domain.user.dto.request.UserUpdateProfileReqDto;
 import com.homes.backend.domain.user.dto.response.IdentityVerificationResDto;
+import com.homes.backend.domain.user.dto.response.UserDetailResDto;
 import com.homes.backend.domain.user.dto.response.UserProfileResDto;
 import com.homes.backend.domain.user.dto.response.UserSignupResDto;
 import com.homes.backend.domain.user.dto.response.UserUpdateProfileResDto;
@@ -19,6 +20,7 @@ import com.homes.backend.domain.user.exception.UserErrorCode;
 import com.homes.backend.domain.property.repository.PropertyFavoriteRepository;
 import com.homes.backend.domain.property.repository.RecentViewRepository;
 import com.homes.backend.domain.realtor.repository.AgentRepository;
+import com.homes.backend.domain.review.repository.ReviewRepository;
 import com.homes.backend.global.exception.CustomException;
 import com.homes.backend.global.security.JwtTokenProvider;
 import com.homes.backend.global.security.TokenDto;
@@ -56,6 +58,7 @@ public class UserService {
     private final PropertyFavoriteRepository propertyFavoriteRepository;
     private final RecentViewRepository recentViewRepository;
     private final AgentRepository agentRepository;
+    private final ReviewRepository reviewRepository;
     private static final long AUTH_CODE_EXPIRATION = 300L; // 인증번호 유효시간: 5분 (300초)
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
@@ -85,6 +88,23 @@ public class UserService {
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         return UserProfileResDto.from(user);
+    }
+
+    /**
+     * 공인중개사가 매물 등록자(유저)의 평판/정보를 확인하기 위한 상세 조회.
+     * 비밀번호/이메일/전화번호 등 개인정보는 노출하지 않는다.
+     *
+     * @param userId 사용자 ID
+     * @return 사용자 공개 상세 정보
+     */
+    public UserDetailResDto getUserDetail(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        Double averageReviewScore = reviewRepository.findAverageScoreByTargetUserId(userId);
+        long reviewCount = reviewRepository.countByTargetUserId(userId);
+
+        return UserDetailResDto.of(user, averageReviewScore, reviewCount);
     }
 
     @Transactional

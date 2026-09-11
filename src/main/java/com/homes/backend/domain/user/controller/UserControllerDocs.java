@@ -4,6 +4,7 @@ import com.homes.backend.domain.property.dto.response.PropertyListRespDto;
 import com.homes.backend.domain.property.dto.response.ReportListRespDto;
 import com.homes.backend.domain.user.dto.request.*;
 import com.homes.backend.domain.user.dto.response.IdentityVerificationResDto;
+import com.homes.backend.domain.user.dto.response.UserDetailResDto;
 import com.homes.backend.domain.user.dto.response.UserProfileResDto;
 import com.homes.backend.domain.user.dto.response.UserSignupResDto;
 import com.homes.backend.domain.user.dto.response.UserUpdateProfileResDto;
@@ -133,5 +134,16 @@ public interface UserControllerDocs {
             @Parameter(description = "Bearer 가 포함된 Access Token을 실어주세요.", required = true)
             @RequestHeader("Authorization") String accessToken
     );
+
+    /**
+     * 공인중개사가 사용자의 공개 상세 정보를 조회합니다.
+     *
+     * @param userId 사용자 ID
+     * @return 사용자 공개 상세 정보
+     */
+    @Operation(summary = "유저 상세보기 (공인중개사 전용)", description = "공인중개사가 매물 등록자의 평판(실명인증 여부, 리뷰 평점 등)을 확인합니다. " +
+            "이메일/전화번호 등 개인정보는 노출하지 않습니다.")
+    @GetMapping("/{userId}")
+    ApiResponse<UserDetailResDto> getUserDetail(@PathVariable Long userId);
 
 }
