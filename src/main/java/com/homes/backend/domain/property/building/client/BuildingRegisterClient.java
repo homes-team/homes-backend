@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -25,7 +26,31 @@ public class BuildingRegisterClient extends PublicDataClientSupport {
     }
 
     public Optional<BuildingRegisterTitle> findTitle(ResolvedAddress address) {
-        URI uri = UriComponentsBuilder.fromHttpUrl(properties.getBuildingRegisterUrl() + "/getBrTitleInfo")
+        URI uri = requestUri("getBrTitleInfo", address);
+        try {
+            List<JsonNode> responseItems = items(restTemplate.getForObject(uri, String.class));
+            return selectMainBuilding(responseItems).map(this::mapTitle);
+        } catch (Exception exception) {
+            log.warn("건축물대장 표제부 조회 실패: legalDongCode={}", address.legalDongCode(), exception);
+            throw new CustomException(PropertyErrorCode.BUILDING_PROVIDER_UNAVAILABLE);
+        }
+    }
+
+    public Optional<BuildingRegisterRecap> findRecap(ResolvedAddress address) {
+        URI uri = requestUri("getBrRecapTitleInfo", address);
+        try {
+            return items(restTemplate.getForObject(uri, String.class)).stream()
+                    .findFirst()
+                    .map(this::mapRecap);
+        } catch (Exception exception) {
+            log.warn("건축물대장 총괄표제부 조회 실패로 단지정보 보강을 생략합니다: legalDongCode={}",
+                    address.legalDongCode(), exception);
+            return Optional.empty();
+        }
+    }
+
+    private URI requestUri(String operation, ResolvedAddress address) {
+        return UriComponentsBuilder.fromHttpUrl(properties.getBuildingRegisterUrl() + "/" + operation)
                 .queryParam("serviceKey", serviceKey())
                 .queryParam("sigunguCd", address.sigunguCode())
                 .queryParam("bjdongCd", address.bjdongCode())
@@ -38,24 +63,37 @@ public class BuildingRegisterClient extends PublicDataClientSupport {
                 .encode(StandardCharsets.UTF_8)
                 .build()
                 .toUri();
-        try {
-            return items(restTemplate.getForObject(uri, String.class)).stream()
-                    .filter(item -> "주건축물".equals(text(item, "mainAtchGbCdNm")) || text(item, "mainAtchGbCdNm") == null)
-                    .findFirst()
-                    .map(this::mapTitle);
-        } catch (Exception exception) {
-            log.warn("건축물대장 표제부 조회 실패: legalDongCode={}", address.legalDongCode(), exception);
-            throw new CustomException(PropertyErrorCode.BUILDING_PROVIDER_UNAVAILABLE);
-        }
+    }
+
+    private Optional<JsonNode> selectMainBuilding(List<JsonNode> responseItems) {
+        return responseItems.stream()
+                .filter(this::isMainBuilding)
+                .findFirst()
+                .or(() -> responseItems.stream().findFirst());
+    }
+
+    private boolean isMainBuilding(JsonNode item) {
+        return "0".equals(text(item, "mainAtchGbCd"))
+                || "주건축물".equals(text(item, "mainAtchGbCdNm"));
     }
 
     private BuildingRegisterTitle mapTitle(JsonNode item) {
         return new BuildingRegisterTitle(
                 text(item, "mgmBldrgstPk"), text(item, "bldNm"), text(item, "platPlc"), text(item, "newPlatPlc"),
-                parseDate(text(item, "useAprDay")), integer(item, "hhldCnt"), integer(item, "fmlyCnt"),
+                parseDate(text(item, "useAprDay")), positiveInteger(item, "hhldCnt"), positiveInteger(item, "fmlyCnt"),
                 decimal(item, "heit"), integer(item, "grndFlrCnt"), integer(item, "ugrndFlrCnt"),
                 sum(integer(item, "rideUseElvtCnt"), integer(item, "emgenUseElvtCnt")),
                 sum(integer(item, "indrAutoUtcnt"), integer(item, "indrMechUtcnt"), integer(item, "oudrAutoUtcnt"), integer(item, "oudrMechUtcnt"))
+        );
+    }
+
+    private BuildingRegisterRecap mapRecap(JsonNode item) {
+        return new BuildingRegisterRecap(
+                text(item, "mgmBldrgstPk"), parseDate(text(item, "useAprDay")),
+                positiveInteger(item, "hhldCnt"), positiveInteger(item, "fmlyCnt"),
+                positiveInteger(item, "mainBldCnt"),
+                positiveSum(integer(item, "indrAutoUtcnt"), integer(item, "indrMechUtcnt"),
+                        integer(item, "oudrAutoUtcnt"), integer(item, "oudrMechUtcnt"))
         );
     }
 
@@ -78,5 +116,10 @@ public class BuildingRegisterClient extends PublicDataClientSupport {
             }
         }
         return present ? sum : null;
+    }
+
+    private static Integer positiveSum(Integer... values) {
+        Integer value = sum(values);
+        return value != null && value > 0 ? value : null;
     }
 }

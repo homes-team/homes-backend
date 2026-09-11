@@ -63,6 +63,11 @@ abstract class PublicDataClientSupport {
         }
     }
 
+    protected static Integer positiveInteger(JsonNode node, String... names) {
+        Integer value = integer(node, names);
+        return value != null && value > 0 ? value : null;
+    }
+
     protected static Double decimal(JsonNode node, String... names) {
         String value = text(node, names);
         if (value == null) return null;

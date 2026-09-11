@@ -43,6 +43,7 @@ public class PropertyBuildingInformationService {
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.BUILDING_ADDRESS_RESOLUTION_FAILED));
         BuildingRegisterTitle register = buildingRegisterClient.findTitle(address)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.BUILDING_INFORMATION_NOT_FOUND));
+        BuildingRegisterRecap recap = buildingRegisterClient.findRecap(address).orElse(null);
         ApartmentComplex complex = apartmentComplexClient.findByAddress(address).orElse(null);
         ApartmentBasicInformation apartment = complex == null
                 ? null
@@ -50,7 +51,7 @@ public class PropertyBuildingInformationService {
 
         PropertyBuildingInformation information = informationRepository.findById(propertyId)
                 .orElseGet(() -> new PropertyBuildingInformation(property));
-        information.refresh(address, register, complex, apartment);
+        information.refresh(address, register, recap, complex, apartment);
         return BuildingInformationRespDto.from(informationRepository.save(information));
     }
 

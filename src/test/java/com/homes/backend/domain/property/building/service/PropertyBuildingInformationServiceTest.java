@@ -54,6 +54,8 @@ class PropertyBuildingInformationServiceTest {
         when(property.getAddress()).thenReturn(address.normalizedAddress());
         when(geocodingService.resolve(property.getAddress())).thenReturn(Optional.of(address));
         when(buildingRegisterClient.findTitle(address)).thenReturn(Optional.of(title));
+        when(buildingRegisterClient.findRecap(address)).thenReturn(Optional.of(
+                new BuildingRegisterRecap("recap-1", LocalDate.of(2004, 6, 18), 720, null, 8, 540)));
         when(apartmentComplexClient.findByAddress(address)).thenReturn(Optional.empty());
         when(informationRepository.findById(1L)).thenReturn(Optional.empty());
         when(informationRepository.save(any(PropertyBuildingInformation.class)))
@@ -64,6 +66,8 @@ class PropertyBuildingInformationServiceTest {
         assertThat(response.buildingRegisterId()).isEqualTo("register-1");
         assertThat(response.buildingYear()).isEqualTo(2004);
         assertThat(response.householdCount()).isEqualTo(720);
+        assertThat(response.buildingCount()).isEqualTo(8);
+        assertThat(response.parkingCount()).isEqualTo(540);
         assertThat(response.status()).isEqualTo("RESOLVED");
     }
 }

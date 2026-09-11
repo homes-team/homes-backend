@@ -2,6 +2,7 @@ package com.homes.backend.domain.property.building.entity;
 
 import com.homes.backend.domain.property.building.client.ApartmentBasicInformation;
 import com.homes.backend.domain.property.building.client.ApartmentComplex;
+import com.homes.backend.domain.property.building.client.BuildingRegisterRecap;
 import com.homes.backend.domain.property.building.client.BuildingRegisterTitle;
 import com.homes.backend.domain.property.entity.Property;
 import com.homes.backend.global.geocoding.ResolvedAddress;
@@ -63,7 +64,7 @@ public class PropertyBuildingInformation {
         this.propertyId = property.getId();
     }
 
-    public void refresh(ResolvedAddress address, BuildingRegisterTitle register,
+    public void refresh(ResolvedAddress address, BuildingRegisterTitle register, BuildingRegisterRecap recap,
                         ApartmentComplex complex, ApartmentBasicInformation apartment) {
         normalizedAddress = address.normalizedAddress();
         legalDongCode = address.legalDongCode();
@@ -75,15 +76,19 @@ public class PropertyBuildingInformation {
 
         buildingRegisterId = register == null ? null : register.registerId();
         kaptCode = complex == null ? null : complex.kaptCode();
-        approvalDate = first(register == null ? null : register.approvalDate(), apartment == null ? null : apartment.approvalDate());
+        approvalDate = first(register == null ? null : register.approvalDate(),
+                recap == null ? null : recap.approvalDate(), apartment == null ? null : apartment.approvalDate());
         buildingYear = approvalDate == null ? null : approvalDate.getYear();
-        householdCount = first(register == null ? null : register.householdCount(), apartment == null ? null : apartment.householdCount());
-        buildingCount = apartment == null ? null : apartment.buildingCount();
+        householdCount = first(recap == null ? null : recap.householdCount(),
+                register == null ? null : register.householdCount(), apartment == null ? null : apartment.householdCount());
+        buildingCount = first(recap == null ? null : recap.buildingCount(),
+                apartment == null ? null : apartment.buildingCount());
         buildingHeightMeters = register == null ? null : register.heightMeters();
         groundFloorCount = first(register == null ? null : register.groundFloorCount(), apartment == null ? null : apartment.highestFloor());
         undergroundFloorCount = register == null ? null : register.undergroundFloorCount();
         elevatorCount = register == null ? null : register.elevatorCount();
-        parkingCount = first(apartment == null ? null : apartment.parkingCount(), register == null ? null : register.parkingCount());
+        parkingCount = first(recap == null ? null : recap.parkingCount(),
+                apartment == null ? null : apartment.parkingCount(), register == null ? null : register.parkingCount());
         corridorType = apartment == null ? null : apartment.corridorType();
         heatingType = apartment == null ? null : apartment.heatingType();
         status = buildingRegisterId != null && approvalDate != null ? BuildingInformationStatus.RESOLVED : BuildingInformationStatus.PARTIAL;
@@ -91,7 +96,11 @@ public class PropertyBuildingInformation {
         collectedAt = LocalDateTime.now();
     }
 
-    private static <T> T first(T primary, T secondary) {
-        return primary != null ? primary : secondary;
+    @SafeVarargs
+    private static <T> T first(T... candidates) {
+        for (T candidate : candidates) {
+            if (candidate != null) return candidate;
+        }
+        return null;
     }
 }
