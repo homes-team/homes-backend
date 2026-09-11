@@ -1,8 +1,7 @@
 package com.homes.backend.domain.realtor.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 @Schema(description = "중개사 마이페이지 회원정보 수정 요청 DTO. 값을 보내지 않은 필드는 기존 값이 유지됩니다.")
@@ -11,17 +10,8 @@ public record AgentUpdateProfileReqDto(
         @Size(min = 1, max = 50, message = "중개사무소명은 1자 이상 50자 이하로 입력해주세요.")
         String officeName,
 
-        @Schema(description = "중개사무소 주소", example = "서울 강남구 역삼동 123-45")
+        @Schema(description = "중개사무소 주소. 위경도는 이 주소를 기반으로 서버가 자동으로 갱신한다.", example = "서울 강남구 역삼동 123-45")
         @Size(min = 1, max = 255, message = "중개사무소 주소는 1자 이상 255자 이하로 입력해주세요.")
-        String officeAddress,
-
-        @Schema(description = "중개사무소 위도 (지도 API에서 추출)", example = "37.4979")
-        @DecimalMin(value = "-90", message = "위도는 -90 이상이어야 합니다.")
-        @DecimalMax(value = "90", message = "위도는 90 이하여야 합니다.")
-        Double officeLatitude,
-
-        @Schema(description = "중개사무소 경도 (지도 API에서 추출)", example = "127.0276")
-        @DecimalMin(value = "-180", message = "경도는 -180 이상이어야 합니다.")
-        @DecimalMax(value = "180", message = "경도는 180 이하여야 합니다.")
-        Double officeLongitude
+        @Pattern(regexp = ".*\\S.*", message = "중개사무소 주소는 공백만으로 입력할 수 없습니다.")
+        String officeAddress
 ) {}

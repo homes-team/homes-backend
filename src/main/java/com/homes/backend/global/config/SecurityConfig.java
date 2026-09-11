@@ -81,6 +81,13 @@ public class SecurityConfig {
         return expressionHandler;
     }
 
+    /**
+     * Configures request authorization, JSON security errors, and JWT authentication.
+     *
+     * @param http Spring Security HTTP configuration
+     * @return configured security filter chain
+     * @throws Exception when the filter chain cannot be built
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -120,9 +127,15 @@ public class SecurityConfig {
                                 org.springframework.http.HttpMethod.GET,
                                 "/properties",
                                 "/properties/{propertyId}",
+                                "/properties/{propertyId}/ai-evaluation",
+                                "/properties/{propertyId}/isochrone",
+                                "/properties/{propertyId}/realtors",
+                                "/properties/{propertyId}/reports",
                                 "/properties/map",
                                 "/properties/surge-rankings",
-                                "/properties/*/verifications"
+                                "/properties/*/verifications",
+                                // 중개사 회원가입(계정/토큰이 아직 없는 상태)에서도 서류 이미지를 미리 업로드해야 해서 로그인 없이 허용
+                                "/properties/presigned-url"
                         ).permitAll()
 
                         // Swagger 관련 프리패스 주소 (이건 기존 yml 설정에 맞게 유지)

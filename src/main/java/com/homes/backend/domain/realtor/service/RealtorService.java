@@ -21,18 +21,20 @@ import com.homes.backend.domain.user.entity.User;
 import com.homes.backend.domain.user.exception.UserErrorCode;
 import com.homes.backend.domain.user.repository.UserRepository;
 import com.homes.backend.global.exception.CustomException;
-import com.homes.backend.global.util.LocalFileUploader;
+import com.homes.backend.global.geocoding.GeocodedPoint;
+import com.homes.backend.global.geocoding.GeocodingService;
+import com.homes.backend.global.storage.S3PresignedUrlService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -48,16 +50,12 @@ public class RealtorService {
     private final ReviewRepository reviewRepository;
     private final PasswordEncoder passwordEncoder;
     private final RedisTemplate<String, Object> redisTemplate;
-    private final LocalFileUploader localFileUploader;
     private final RealtorAccountWriter realtorAccountWriter;
+    private final GeocodingService geocodingService;
+    private final S3PresignedUrlService s3PresignedUrlService;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public RealtorSignupResDto signUp(
-            RealtorSignupReqDto request,
-            MultipartFile businessCertImage,
-            MultipartFile agentCertImage,
-            MultipartFile profileImage
-    ) {
+    public RealtorSignupResDto signUp(RealtorSignupReqDto request) {
         // 1. 이메일 DB 중복 검사
         if (userRepository.existsByEmail(request.email())) {
             throw new CustomException(UserErrorCode.DUPLICATE_EMAIL);
@@ -74,6 +72,14 @@ public class RealtorService {
             throw new CustomException(RealtorErrorCode.DUPLICATE_BUSINESS_NUM);
         }
 
+        // 3-1. 업로드된 서류/프로필 이미지 검증 - 용량 확인 + 이 이메일로 발급받은 URL이 맞는지 대조 후 소비 처리
+        String uploaderIdentity = "email:" + request.email();
+        s3PresignedUrlService.validateAndConsumeUploadedFile(request.businessCertUrl(), uploaderIdentity);
+        s3PresignedUrlService.validateAndConsumeUploadedFile(request.agentCertUrl(), uploaderIdentity);
+        if (request.profileImageUrl() != null) {
+            s3PresignedUrlService.validateAndConsumeUploadedFile(request.profileImageUrl(), uploaderIdentity);
+        }
+
         // 4. 유저 계정 생성
         User user = User.builder()
                 .email(request.email())
@@ -83,21 +89,14 @@ public class RealtorService {
                 .role("AGENT")
                 .build();
 
-        // 5. 서류 이미지 업로드 (S3 연동 전까지는 로컬 업로더 사용)
-        String businessCertUrl = localFileUploader.upload(businessCertImage, "agent-certs");
-        String agentCertUrl = localFileUploader.upload(agentCertImage, "agent-certs");
-        String profileImageUrl = localFileUploader.upload(profileImage, "agent-profiles");
+        // 5. 사무소 주소 -> 위경도 자동 변환 (실패해도 가입 자체는 막지 않음)
+        Optional<GeocodedPoint> geocodedPoint = geocodingService.geocode(request.officeAddress());
+        Double officeLatitude = geocodedPoint.map(GeocodedPoint::latitude).orElse(null);
+        Double officeLongitude = geocodedPoint.map(GeocodedPoint::longitude).orElse(null);
 
-        // 6. 중개사 프로필 생성 (관리자 승인 전까지 isVerified=false로 대기)
-        Agent savedAgent;
-        try {
-            savedAgent = realtorAccountWriter.write(user, request, businessCertUrl, agentCertUrl, profileImageUrl);
-        } catch (RuntimeException e) {
-            localFileUploader.delete(businessCertUrl);
-            localFileUploader.delete(agentCertUrl);
-            localFileUploader.delete(profileImageUrl);
-            throw e;
-        }
+        // 6. 중개사 프로필 생성 (관리자 승인 전까지 isVerified=false로 대기). 서류 이미지는 클라이언트가
+        // presigned URL로 이미 S3에 올려서 URL만 넘어오므로, 여기서 별도 업로드/롤백 처리는 필요 없다.
+        Agent savedAgent = realtorAccountWriter.write(user, request, officeLatitude, officeLongitude);
 
         // 가입에 사용된 이메일 인증 증표는 파기
         redisTemplate.delete("AUTH_SUCCESS:" + request.email());
@@ -116,8 +115,16 @@ public class RealtorService {
 
         String officeName = request.officeName() != null ? request.officeName() : agent.getOfficeName();
         String officeAddress = request.officeAddress() != null ? request.officeAddress() : agent.getOfficeAddress();
-        Double officeLatitude = request.officeLatitude() != null ? request.officeLatitude() : agent.getOfficeLatitude();
-        Double officeLongitude = request.officeLongitude() != null ? request.officeLongitude() : agent.getOfficeLongitude();
+
+        Double officeLatitude = agent.getOfficeLatitude();
+        Double officeLongitude = agent.getOfficeLongitude();
+
+        // 주소가 바뀌면 위경도도 새로 계산한다 (실패 시 null로 - 옛 주소의 좌표를 그대로 남겨두면 주소-좌표가 서로 어긋나게 됨)
+        if (request.officeAddress() != null) {
+            Optional<GeocodedPoint> geocodedPoint = geocodingService.geocode(request.officeAddress());
+            officeLatitude = geocodedPoint.map(GeocodedPoint::latitude).orElse(null);
+            officeLongitude = geocodedPoint.map(GeocodedPoint::longitude).orElse(null);
+        }
 
         agent.updateOfficeProfile(officeName, officeAddress, officeLatitude, officeLongitude);
 
