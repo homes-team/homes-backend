@@ -20,9 +20,8 @@ public class RealtorAccountWriter {
     public Agent write(
             User user,
             RealtorSignupReqDto request,
-            String businessCertUrl,
-            String agentCertUrl,
-            String profileImageUrl
+            Double officeLatitude,
+            Double officeLongitude
     ) {
         User savedUser = userRepository.save(user);
 
@@ -31,11 +30,11 @@ public class RealtorAccountWriter {
                 .businessNum(request.businessNum())
                 .officeName(request.officeName())
                 .officeAddress(request.officeAddress())
-                .officeLatitude(request.officeLatitude())
-                .officeLongitude(request.officeLongitude())
-                .businessCertUrl(businessCertUrl)
-                .agentCertUrl(agentCertUrl)
-                .profileImageUrl(profileImageUrl)
+                .officeLatitude(officeLatitude)
+                .officeLongitude(officeLongitude)
+                .businessCertUrl(request.businessCertUrl())
+                .agentCertUrl(request.agentCertUrl())
+                .profileImageUrl(request.profileImageUrl())
                 .build();
 
         return agentRepository.save(agent);

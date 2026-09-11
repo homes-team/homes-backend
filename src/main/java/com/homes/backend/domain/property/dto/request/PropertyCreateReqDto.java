@@ -52,6 +52,9 @@ public record PropertyCreateReqDto(
         Double latitude,
 
         @Schema(description = "지도 API에서 추출된 경도(Longitude)", example = "127.0276")
-        Double longitude
+        Double longitude,
+
+        @Schema(description = "매물 사진 URL 목록. GET /properties/presigned-url로 미리 S3에 업로드한 뒤 그 결과 URL들을 순서대로 담는다 (첫 번째가 대표 이미지)")
+        List<String> imageUrls
 ) {
 }
