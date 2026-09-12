@@ -34,6 +34,14 @@ public class GeocodingService {
      * 예외를 던지지 않고 빈 Optional을 반환한다 - 지오코딩 실패가 회원가입/프로필 수정 자체를 막아서는 안 되기 때문.
      */
     public Optional<GeocodedPoint> geocode(String address) {
+        return resolve(address)
+                .map(result -> new GeocodedPoint(result.latitude(), result.longitude()));
+    }
+
+    /**
+     * 주소를 좌표와 건축물대장 조회용 법정동·지번 정보로 변환합니다.
+     */
+    public Optional<ResolvedAddress> resolve(String address) {
         if (!StringUtils.hasText(address)) {
             return Optional.empty();
         }
@@ -68,10 +76,42 @@ public class GeocodingService {
             JsonNode first = documents.get(0);
             double longitude = first.path("x").asDouble();
             double latitude = first.path("y").asDouble();
-            return Optional.of(new GeocodedPoint(latitude, longitude));
+            JsonNode lotAddress = first.path("address");
+            String legalDongCode = lotAddress.path("b_code").asText();
+            if (legalDongCode.length() != 10) {
+                log.warn("카카오 주소 결과에 유효한 법정동 코드가 없음: address={}", address);
+                return Optional.empty();
+            }
+
+            return Optional.of(new ResolvedAddress(
+                    lotAddress.path("address_name").asText(first.path("address_name").asText(address)),
+                    latitude,
+                    longitude,
+                    legalDongCode,
+                    legalDongCode.substring(0, 5),
+                    legalDongCode.substring(5),
+                    "Y".equalsIgnoreCase(lotAddress.path("mountain_yn").asText()) ? "1" : "0",
+                    padLotNumber(lotAddress.path("main_address_no").asText()),
+                    padLotNumber(lotAddress.path("sub_address_no").asText()),
+                    first.path("road_address").path("building_name").asText(null)
+            ));
         } catch (Exception e) {
             log.warn("카카오 지오코딩 통신 실패: address={}", address, e);
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Formats a lot-number component as the four digits expected by the building register.
+     */
+    static String padLotNumber(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "0000";
+        }
+        try {
+            return String.format("%04d", Integer.parseInt(value));
+        } catch (NumberFormatException exception) {
+            return value;
         }
     }
 }
