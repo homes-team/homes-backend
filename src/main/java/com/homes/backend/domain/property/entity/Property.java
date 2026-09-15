@@ -169,6 +169,14 @@ public class Property extends BaseEntity {
     }
 
     /**
+     * 의심 매물 상태를 직접 지정한다. 신고 누적 자동 전환과 별개로,
+     * 규칙 기반 자동탐지 또는 관리자 수동 지정으로도 호출된다.
+     */
+    public void markSuspicious(boolean isSuspicious) {
+        this.isSuspicious = isSuspicious;
+    }
+
+    /**
      * 매물 정보 수정
      */
     public void update(String title, String description, String address, String detailAddress,

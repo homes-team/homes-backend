@@ -87,6 +87,20 @@ public interface PropertyRepository extends JpaRepository<Property, Long>, Prope
     void increaseReportCountAndCheckSuspicious(@Param("propertyId") Long propertyId);
 
     /**
+     * 허위매물 자동탐지 규칙 - 같은 주소+상세주소(즉 같은 호실)를 다른 소유자가 동시에 등록한 경우를 찾는다.
+     * 같은 유저가 본인 매물을 수정/재등록하는 경우는 제외한다.
+     */
+    @Query("SELECT p FROM Property p WHERE p.address = :address AND p.detailAddress = :detailAddress " +
+            "AND p.id <> :excludePropertyId AND p.user.id <> :excludeUserId AND p.status <> :excludedStatus")
+    List<Property> findConflictingAddressListings(
+            @Param("address") String address,
+            @Param("detailAddress") String detailAddress,
+            @Param("excludePropertyId") Long excludePropertyId,
+            @Param("excludeUserId") Long excludeUserId,
+            @Param("excludedStatus") PropertyStatus excludedStatus
+    );
+
+    /**
      * 중개사 매칭(acceptBid)에서 동시 수락 막는 잠금
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
