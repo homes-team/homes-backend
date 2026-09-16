@@ -7,6 +7,7 @@ import org.locationtech.jts.geom.Point;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -87,17 +88,38 @@ public interface PropertyRepository extends JpaRepository<Property, Long>, Prope
     void increaseReportCountAndCheckSuspicious(@Param("propertyId") Long propertyId);
 
     /**
-     * 허위매물 자동탐지 규칙 - 같은 주소+상세주소(즉 같은 호실)를 다른 소유자가 동시에 등록한 경우를 찾는다.
-     * 같은 유저가 본인 매물을 수정/재등록하는 경우는 제외한다.
+     * 허위매물 자동탐지 규칙 - 같은 주소+상세주소(즉 같은 호실)로 이미 살아있는(활성) 매물이 또 있는지 찾는다.
+     * 소유자가 같든 다르든 상관없다 - 정상적인 재등록은 "삭제 후 재등록" 순서라 이 시점엔 옛 매물이 이미 DELETED이므로
+     * 걸리지 않고, 삭제하지 않은 채 같은 호실을 중복으로 올리는 것 자체가 이상 신호(중복 클릭 실수든 의도적 어뷰징이든)다.
      */
     @Query("SELECT p FROM Property p WHERE p.address = :address AND p.detailAddress = :detailAddress " +
-            "AND p.id <> :excludePropertyId AND p.user.id <> :excludeUserId AND p.status <> :excludedStatus")
+            "AND p.id <> :excludePropertyId AND p.status <> :excludedStatus")
     List<Property> findConflictingAddressListings(
             @Param("address") String address,
             @Param("detailAddress") String detailAddress,
             @Param("excludePropertyId") Long excludePropertyId,
-            @Param("excludeUserId") Long excludeUserId,
             @Param("excludedStatus") PropertyStatus excludedStatus
+    );
+
+    /**
+     * 허위매물 자동탐지 규칙 - 같은 유저가 최근(createdAfter 이후) 등록한 매물 수 (단시간 대량등록 탐지용)
+     */
+    long countByUserIdAndCreatedAtAfter(Long userId, LocalDateTime createdAfter);
+
+    /**
+     * 허위매물 자동탐지 규칙 - 신고 이력이 있던(의심 매물이었거나 신고를 받았던) 삭제 매물을,
+     * 같은 유저가 같은 주소+상세주소로 다시 등록했는지 여부 (신고 이력 세탁 시도 탐지용)
+     */
+    @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Property p " +
+            "WHERE p.user.id = :userId AND p.address = :address AND p.detailAddress = :detailAddress " +
+            "AND p.id <> :excludePropertyId AND p.status = :deletedStatus " +
+            "AND (p.isSuspicious = true OR p.reportCount > 0)")
+    boolean existsPreviouslyFlaggedDeletedListing(
+            @Param("userId") Long userId,
+            @Param("address") String address,
+            @Param("detailAddress") String detailAddress,
+            @Param("excludePropertyId") Long excludePropertyId,
+            @Param("deletedStatus") PropertyStatus deletedStatus
     );
 
     /**
