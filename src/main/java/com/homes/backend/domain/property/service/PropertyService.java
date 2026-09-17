@@ -10,6 +10,7 @@ import com.homes.backend.domain.property.dto.response.PropertyDetailRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyListRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyRealtorInfoResDto;
 import com.homes.backend.domain.property.entity.*;
+import com.homes.backend.domain.property.event.PropertySavedEvent;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
 import com.homes.backend.domain.property.repository.*;
 import com.homes.backend.domain.realtor.entity.Agent;
@@ -20,6 +21,7 @@ import com.homes.backend.global.exception.CustomException;
 import com.homes.backend.global.storage.S3PresignedUrlService;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.*;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,7 @@ public class PropertyService {
     private final StationRepository stationRepository;
     private final S3PresignedUrlService s3PresignedUrlService;
     private final BidRepository bidRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * GPS 표준인 4326(WGS84) 기반으로 Point를 만들어주는 팩토리
@@ -124,7 +127,10 @@ public class PropertyService {
             }
         }
 
-        return propertyRepository.save(property).getId();
+        Long savedPropertyId = propertyRepository.save(property).getId();
+        eventPublisher.publishEvent(new PropertySavedEvent(savedPropertyId));
+
+        return savedPropertyId;
     }
 
     /**
@@ -289,6 +295,7 @@ public class PropertyService {
             }
         }
 
+        eventPublisher.publishEvent(new PropertySavedEvent(propertyId));
     }
 
     /**

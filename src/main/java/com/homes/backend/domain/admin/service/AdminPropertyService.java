@@ -55,4 +55,16 @@ public class AdminPropertyService {
 
         property.markAsDeleted();
     }
+
+    /**
+     * 의심 매물 여부를 관리자가 직접 지정/해제한다. 신고 누적 자동 전환, 규칙 기반 자동탐지와는
+     * 별개의 수동 경로로, 삭제까지는 아니지만 주의가 필요하다고 판단될 때 사용한다.
+     */
+    @Transactional
+    public void updateSuspiciousStatus(Long propertyId, boolean isSuspicious) {
+        Property property = propertyRepository.findById(propertyId)
+                .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+
+        property.markSuspicious(isSuspicious);
+    }
 }

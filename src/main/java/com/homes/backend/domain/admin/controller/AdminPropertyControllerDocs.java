@@ -1,14 +1,18 @@
 package com.homes.backend.domain.admin.controller;
 
+import com.homes.backend.domain.admin.dto.request.AdminPropertySuspiciousReqDto;
 import com.homes.backend.domain.admin.dto.response.AdminPropertyReportDetailResDto;
 import com.homes.backend.domain.admin.dto.response.AdminReportedPropertyResDto;
 import com.homes.backend.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 
@@ -32,5 +36,13 @@ public interface AdminPropertyControllerDocs {
     @DeleteMapping("/properties/{propertyId}")
     ApiResponse<Void> deleteProperty(
             @Parameter(description = "매물 ID") @PathVariable Long propertyId
+    );
+
+    @Operation(summary = "의심 매물 여부 수동 지정", description = "신고 누적(5건)이나 규칙 기반 자동탐지(동일 호실 중복 등록)를 거치지 않고, " +
+            "관리자가 직접 특정 매물을 의심 매물로 지정하거나 해제합니다. 삭제까지는 아니지만 주의가 필요한 경우에 사용합니다.")
+    @PatchMapping("/properties/{propertyId}/suspicious")
+    ApiResponse<Void> updateSuspiciousStatus(
+            @Parameter(description = "매물 ID") @PathVariable Long propertyId,
+            @RequestBody @Valid AdminPropertySuspiciousReqDto reqDto
     );
 }
