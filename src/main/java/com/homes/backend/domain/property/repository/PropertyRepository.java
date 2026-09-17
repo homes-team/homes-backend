@@ -91,14 +91,16 @@ public interface PropertyRepository extends JpaRepository<Property, Long>, Prope
      * 허위매물 자동탐지 규칙 - 같은 주소+상세주소(즉 같은 호실)로 이미 살아있는(활성) 매물이 또 있는지 찾는다.
      * 소유자가 같든 다르든 상관없다 - 정상적인 재등록은 "삭제 후 재등록" 순서라 이 시점엔 옛 매물이 이미 DELETED이므로
      * 걸리지 않고, 삭제하지 않은 채 같은 호실을 중복으로 올리는 것 자체가 이상 신호(중복 클릭 실수든 의도적 어뷰징이든)다.
+     * DELETED뿐 아니라 COMPLETED(거래완료, 이미 종결된 거래)도 더 이상 활성 매물이 아니므로 후보에서 제외한다.
+     * MATCHED(매칭완료, 거래 진행 중)는 여전히 활성 상태이므로 후보에 포함된다.
      */
     @Query("SELECT p FROM Property p WHERE p.address = :address AND p.detailAddress = :detailAddress " +
-            "AND p.id <> :excludePropertyId AND p.status <> :excludedStatus")
+            "AND p.id <> :excludePropertyId AND p.status NOT IN :excludedStatuses")
     List<Property> findConflictingAddressListings(
             @Param("address") String address,
             @Param("detailAddress") String detailAddress,
             @Param("excludePropertyId") Long excludePropertyId,
-            @Param("excludedStatus") PropertyStatus excludedStatus
+            @Param("excludedStatuses") List<PropertyStatus> excludedStatuses
     );
 
     /**

@@ -32,39 +32,52 @@ public class PropertyRiskDetectionService {
 
     private static final double MAX_REASONABLE_AREA = 1000.0; // ㎡ 기준 - 이보다 크면 입력 오류로 간주
 
+    // 동일 주소 충돌 검사에서 "활성 매물"로 치지 않을 상태 - DELETED(삭제), COMPLETED(거래완료, 이미 종결)
+    // MATCHED(매칭완료, 거래 진행 중)는 여전히 활성이므로 제외 목록에 넣지 않는다
+    private static final List<PropertyStatus> CONFLICT_CHECK_EXCLUDED_STATUSES =
+            List.of(PropertyStatus.DELETED, PropertyStatus.COMPLETED);
+
     private final PropertyRepository propertyRepository;
 
     // 매물 저장 트랜잭션이 실제로 커밋된 뒤에만 검사한다 (저장 자체가 실패/롤백되면 검사할 대상이 없음)
+    // 이 시점은 이미 커밋이 끝난 뒤라, 여기서 예외가 그대로 새어나가면 매물 저장 자체는 성공했는데도
+    // 원래 요청(생성/수정)의 응답이 실패로 뒤집혀 버릴 수 있다 - 그래서 예외를 여기서 반드시 흡수해야 한다.
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handlePropertySaved(PropertySavedEvent event) {
-        Property property = propertyRepository.findById(event.propertyId()).orElse(null);
-        if (property == null || property.getStatus() == PropertyStatus.DELETED) {
-            return;
-        }
+        try {
+            Property property = propertyRepository.findById(event.propertyId()).orElse(null);
+            if (property == null || property.getStatus() == PropertyStatus.DELETED) {
+                return;
+            }
 
-        boolean suspicious = false;
-        suspicious |= checkConflictingAddress(property);
-        suspicious |= checkInconsistentPricing(property);
-        suspicious |= checkBulkRegistration(property);
-        suspicious |= checkReRegistrationEvasion(property);
+            boolean suspicious = false;
+            suspicious |= checkConflictingAddress(property);
+            suspicious |= checkInconsistentPricing(property);
+            suspicious |= checkBulkRegistration(property);
+            suspicious |= checkReRegistrationEvasion(property);
 
-        if (suspicious) {
-            property.markSuspicious(true);
+            if (suspicious) {
+                property.markSuspicious(true);
+            }
+        } catch (Exception e) {
+            log.error("허위매물 자동탐지 중 오류 발생 (매물 저장 자체는 이미 성공, 의심 매물 판정만 건너뜀): propertyId={}",
+                    event.propertyId(), e);
         }
     }
 
     /**
      * 규칙 1: 같은 주소+상세주소(같은 호실)로 이미 살아있는 매물이 또 있는 경우 (소유자 동일 여부 무관).
-     * 정상적인 재등록은 "삭제 후 재등록" 순서라 이 시점엔 옛 매물이 DELETED 상태이므로 걸리지 않는다 -
-     * 삭제 없이 같은 호실이 중복으로 살아있는 것 자체가 이상 신호(중복 클릭 실수 또는 어뷰징)이므로 가격 비교 없이 즉시 전환한다.
+     * 정상적인 재등록은 "삭제 후 재등록" 순서라 이 시점엔 옛 매물이 DELETED 상태이므로 걸리지 않고,
+     * 이미 거래가 종결된(COMPLETED) 매물도 더 이상 활성 매물이 아니므로 충돌 후보에서 제외한다 -
+     * 삭제/종결 없이 같은 호실이 중복으로 살아있는 것 자체가 이상 신호(중복 클릭 실수 또는 어뷰징)이므로 가격 비교 없이 즉시 전환한다.
      */
     private boolean checkConflictingAddress(Property property) {
         List<Property> conflictingListings = propertyRepository.findConflictingAddressListings(
                 property.getAddress(),
                 property.getDetailAddress(),
                 property.getId(),
-                PropertyStatus.DELETED
+                CONFLICT_CHECK_EXCLUDED_STATUSES
         );
 
         if (conflictingListings.isEmpty()) {
