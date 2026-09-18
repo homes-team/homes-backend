@@ -42,6 +42,16 @@ public class PropertyRegistryRiskScanService {
             RegistryRiskScanResult result = registryRiskScanner.scan(property);
             boolean alreadyScanned = registryRiskRepository.findByPropertyId(property.getId()).isPresent();
 
+            // markSuspicious()는 alreadyScanned 분기의 벌크 UPDATE(clearAutomatically=true)보다 먼저 호출해야 한다.
+            // 벌크 쿼리가 영속성 컨텍스트를 비워버리면 그 뒤에 이 managed 엔티티를 건드려도 detach된 상태라
+            // dirty checking이 안 먹혀서 커밋 시점에 반영되지 않는다 (flushAutomatically=true가 이 변경사항을
+            // 벌크 쿼리 실행 전에 먼저 flush해주므로, 순서만 지키면 안전하게 반영된다).
+            if (result.riskLevel() == RegistryRiskLevel.DANGER) {
+                log.info("등기부등본 위험도 DANGER 감지 - 의심 매물로 자동 전환: propertyId={}, mortgageCount={}, seizureCount={}",
+                        property.getId(), result.mortgageCount(), result.seizureCount());
+                property.markSuspicious(true);
+            }
+
             if (alreadyScanned) {
                 // 값이 이전과 완전히 같아도(결정적 mock이라 흔함) updated_at("최종 스캔일시")이 항상 갱신되도록 벌크 쿼리로 처리
                 registryRiskRepository.updateScanResult(
@@ -56,12 +66,6 @@ public class PropertyRegistryRiskScanService {
                                 .summary(result.summary())
                                 .build()
                 );
-            }
-
-            if (result.riskLevel() == RegistryRiskLevel.DANGER) {
-                log.info("등기부등본 위험도 DANGER 감지 - 의심 매물로 자동 전환: propertyId={}, mortgageCount={}, seizureCount={}",
-                        property.getId(), result.mortgageCount(), result.seizureCount());
-                property.markSuspicious(true);
             }
         } catch (Exception e) {
             log.error("등기부등본 위험도 스캔 중 오류 발생 (매물 저장 자체는 이미 성공, 스캔만 건너뜀): propertyId={}",
