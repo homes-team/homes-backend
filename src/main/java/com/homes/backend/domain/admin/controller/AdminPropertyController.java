@@ -34,6 +34,13 @@ public class AdminPropertyController implements AdminPropertyControllerDocs {
 
     @Override
     @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/suspicious-properties")
+    public ApiResponse<List<AdminReportedPropertyResDto>> getSuspiciousProperties() {
+        return ApiResponse.onSuccess(adminPropertyService.getSuspiciousProperties());
+    }
+
+    @Override
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/properties/{propertyId}/reports")
     public ApiResponse<List<AdminPropertyReportDetailResDto>> getPropertyReportDetail(@PathVariable Long propertyId) {
         return ApiResponse.onSuccess(adminPropertyService.getPropertyReportDetail(propertyId));

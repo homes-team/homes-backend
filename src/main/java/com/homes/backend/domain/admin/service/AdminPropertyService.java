@@ -32,6 +32,16 @@ public class AdminPropertyService {
     }
 
     /**
+     * 의심 매물 전체 목록. 신고 누적/규칙 기반 자동탐지/등기부등본 스캔/관리자 수동 지정 등
+     * 출처와 무관하게 isSuspicious=true인 매물을 전부 모아서 보여준다. 최근 판정 순 정렬.
+     */
+    public List<AdminReportedPropertyResDto> getSuspiciousProperties() {
+        return propertyRepository.findSuspiciousProperties(PropertyStatus.DELETED).stream()
+                .map(AdminReportedPropertyResDto::from)
+                .toList();
+    }
+
+    /**
      * 특정 매물의 신고 상세 내역. 의심 매물 여부, 삭제 여부와 무관하게 조회 가능(감사 목적)
      */
     public List<AdminPropertyReportDetailResDto> getPropertyReportDetail(Long propertyId) {

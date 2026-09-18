@@ -24,6 +24,13 @@ public interface AdminPropertyControllerDocs {
     @GetMapping("/reports")
     ApiResponse<List<AdminReportedPropertyResDto>> getReportedProperties();
 
+    @Operation(summary = "의심 매물 전체 목록 조회", description = "신고 누적(5건), 규칙 기반 자동탐지(동일 호실 중복 등록/가격 모순/대량등록/재등록 회피), " +
+            "등기부등본 위험도 스캔(DANGER), 관리자 수동 지정 등 **출처와 무관하게** 현재 isSuspicious=true인 매물을 전부 조회합니다. " +
+            "신고된 매물 목록(/admin/reports)은 신고 1건부터 보여주는 조기경보용이고, 이 API는 실제로 의심 매물 판정이 난 것만 모아서 보여줍니다. " +
+            "최근에 판정된 매물이 상위에 오도록 정렬되며, 이미 삭제 처리된 매물은 제외됩니다.")
+    @GetMapping("/suspicious-properties")
+    ApiResponse<List<AdminReportedPropertyResDto>> getSuspiciousProperties();
+
     @Operation(summary = "매물 신고 상세 내역 조회", description = "특정 매물에 접수된 신고 내역(사유, 신고자, 신고 시각)을 조회합니다. " +
             "의심 매물 여부, 삭제 여부와 무관하게 신고 이력이 있으면 조회할 수 있습니다.")
     @GetMapping("/properties/{propertyId}/reports")
