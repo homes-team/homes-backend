@@ -140,6 +140,16 @@ public interface PropertyRepository extends JpaRepository<Property, Long>, Prope
     List<Property> findByReportCountGreaterThanAndStatusNotOrderByReportCountDesc(Integer reportCount, PropertyStatus excludedStatus);
 
     /**
+     * 관리자용 의심 매물 전체 목록. 신고 누적, 규칙 기반 자동탐지, 등기부등본 스캔, 관리자 수동 지정 등
+     * "출처 무관하게" isSuspicious=true인 매물을 전부 모아서 보여준다 (findByReportCountGreaterThan...과는 별개 -
+     * 그쪽은 아직 임계값에 안 닿은 "신고 조짐"까지 보여주는 조기경보용이라 그대로 둔다).
+     * 최근에 의심 판정된 것이 위로 오도록 updatedAt 내림차순.
+     */
+    @EntityGraph(attributePaths = "user")
+    @Query("SELECT p FROM Property p WHERE p.isSuspicious = true AND p.status <> :excludedStatus ORDER BY p.updatedAt DESC")
+    List<Property> findSuspiciousProperties(@Param("excludedStatus") PropertyStatus excludedStatus);
+
+    /**
      * 급등 랭킹 조회용. Redis에는 삭제된 매물의 ID가 여전히 남아있을 수 있으므로 여기서 걸러낸다
      */
     List<Property> findByIdInAndStatusNot(List<Long> ids, PropertyStatus excludedStatus);
