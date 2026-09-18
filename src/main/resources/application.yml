@@ -18,6 +18,18 @@ spring:
 server:
   port: 8080
 
+external-api:
+  public-data:
+    service-key: ${PUBLIC_DATA_SERVICE_KEY:}
+    building-register-url: ${BUILDING_REGISTER_API_URL:https://apis.data.go.kr/1613000/BldRgstHubService}
+    apartment-list-url: ${APARTMENT_LIST_API_URL:https://apis.data.go.kr/1613000/AptListService4}
+    apartment-basis-url: ${APARTMENT_BASIS_API_URL:https://apis.data.go.kr/1613000/AptBasisInfoServiceV5}
+    connect-timeout-millis: 3000
+    read-timeout-millis: 5000
+
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY:}
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

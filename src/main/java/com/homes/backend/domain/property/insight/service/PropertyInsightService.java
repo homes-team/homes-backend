@@ -2,6 +2,8 @@ package com.homes.backend.domain.property.insight.service;
 
 import com.homes.backend.domain.property.entity.Property;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
+import com.homes.backend.domain.property.building.entity.PropertyBuildingInformation;
+import com.homes.backend.domain.property.building.repository.PropertyBuildingInformationRepository;
 import com.homes.backend.domain.property.insight.data.DobongAiDataset;
 import com.homes.backend.domain.property.insight.dto.AiEvaluationRespDto;
 import com.homes.backend.domain.property.insight.dto.IsochroneRespDto;
@@ -32,6 +34,7 @@ public class PropertyInsightService {
     private final PropertyRepository propertyRepository;
     private final PropertyAiEvaluationRepository evaluationRepository;
     private final DobongAiDataset dobongAiDataset;
+    private final PropertyBuildingInformationRepository buildingInformationRepository;
 
     /**
      * Builds the six-category AI evaluation for a property from stored or bundled data.
@@ -45,6 +48,9 @@ public class PropertyInsightService {
         Optional<DobongAiDataset.Entry> dataset = stored.isEmpty()
                 ? dobongAiDataset.findByAddress(property.getAddress())
                 : Optional.empty();
+        Optional<PropertyBuildingInformation> buildingInformation = stored.isEmpty()
+                ? buildingInformationRepository.findById(propertyId)
+                : Optional.empty();
 
         Double schoolScore = stored.map(PropertyAiEvaluation::getSchoolScore)
                 .orElseGet(() -> dataset.map(DobongAiDataset.Entry::educationScore).orElse(null));
@@ -54,26 +60,29 @@ public class PropertyInsightService {
                 .orElseGet(() -> dataset.map(DobongAiDataset.Entry::parkScore).orElse(null));
         Double sunlightScore = stored.map(PropertyAiEvaluation::getSunlightScore).orElse(null);
         Double buildingScore = stored.map(PropertyAiEvaluation::getBuildingConditionScore)
-                .orElseGet(() -> dataset.map(DobongAiDataset.Entry::buildYear)
+                .orElseGet(() -> buildingInformation.map(PropertyBuildingInformation::getBuildingYear)
+                        .or(() -> dataset.map(DobongAiDataset.Entry::buildYear))
                         .map(PropertyInsightService::calculateBuildingConditionScore).orElse(null));
         Double infrastructureScore = stored.map(PropertyAiEvaluation::getInfrastructureScore)
                 .orElseGet(() -> dataset.map(PropertyInsightService::calculateInfrastructureScore).orElse(null));
 
         ScoreSource geospatialSource = dataset.isPresent() ? ScoreSource.EXTERNAL_DATA : ScoreSource.GEOSPATIAL_PIPELINE;
-        ScoreSource buildingSource = dataset.isPresent() ? ScoreSource.PROPERTY_RULE : ScoreSource.GEOSPATIAL_PIPELINE;
+        ScoreSource buildingSource = buildingInformation.isPresent() || dataset.isPresent()
+                ? ScoreSource.PROPERTY_RULE : ScoreSource.GEOSPATIAL_PIPELINE;
 
         List<CategoryScore> categories = List.of(
                 category(CategoryKey.SCHOOL, "학군지", schoolScore, geospatialSource, schoolDescription(dataset)),
                 category(CategoryKey.TRANSPORT, "교통", transportScore, geospatialSource, transportDescription(dataset)),
                 category(CategoryKey.NATURE, "자연", natureScore, geospatialSource, natureDescription(dataset)),
                 category(CategoryKey.SUNLIGHT, "일조량", sunlightScore, ScoreSource.PROPERTY_RULE, "매물 방향 정보가 수집되면 층수와 함께 평가에 반영됩니다."),
-                category(CategoryKey.BUILDING_CONDITION, "건물 상태", buildingScore, buildingSource, buildingDescription(dataset)),
+                category(CategoryKey.BUILDING_CONDITION, "건물 상태", buildingScore, buildingSource,
+                        buildingDescription(buildingInformation, dataset)),
                 category(CategoryKey.INFRASTRUCTURE, "인프라", infrastructureScore, geospatialSource, infrastructureDescription(dataset))
         );
 
         List<Double> availableScores = categories.stream().map(CategoryScore::rawScore).filter(v -> v != null).toList();
         int evaluatedCount = availableScores.size();
-        Double rawOverall = availableScores.isEmpty()
+        Double rawOverall = evaluatedCount < 4
                 ? null
                 : round1(availableScores.stream().mapToDouble(Double::doubleValue).average().orElse(0));
         double completeness = Math.round(evaluatedCount / 6.0 * 1000.0) / 10.0;
@@ -259,8 +268,10 @@ public class PropertyInsightService {
      * @param dataset matching dataset entry
      * @return building-condition description
      */
-    private String buildingDescription(Optional<DobongAiDataset.Entry> dataset) {
-        return dataset.flatMap(entry -> Optional.ofNullable(entry.buildYear()))
+    private String buildingDescription(Optional<PropertyBuildingInformation> buildingInformation,
+                                       Optional<DobongAiDataset.Entry> dataset) {
+        return buildingInformation.map(PropertyBuildingInformation::getBuildingYear)
+                .or(() -> dataset.flatMap(entry -> Optional.ofNullable(entry.buildYear())))
                 .map(year -> year + "년 준공 정보를 기준으로 산정한 점수입니다.")
                 .orElse("준공연도와 건물 시설 정보가 수집되면 평가에 반영됩니다.");
     }
