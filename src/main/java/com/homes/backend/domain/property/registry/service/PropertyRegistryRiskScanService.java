@@ -3,12 +3,14 @@ package com.homes.backend.domain.property.registry.service;
 import com.homes.backend.domain.property.entity.Property;
 import com.homes.backend.domain.property.entity.PropertyStatus;
 import com.homes.backend.domain.property.event.PropertySavedEvent;
+import com.homes.backend.domain.property.registry.config.PropertyRegistryRiskScanAsyncConfig;
 import com.homes.backend.domain.property.registry.entity.PropertyRegistryRisk;
 import com.homes.backend.domain.property.registry.entity.RegistryRiskLevel;
 import com.homes.backend.domain.property.registry.repository.PropertyRegistryRiskRepository;
 import com.homes.backend.domain.property.repository.PropertyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +33,7 @@ public class PropertyRegistryRiskScanService {
     // 매물 저장 트랜잭션이 실제로 커밋된 뒤에만 스캔한다. 여기서 예외가 나도 매물 저장 자체(원래 요청)에
     // 영향을 주면 안 되므로 반드시 흡수한다 (PropertyRiskDetectionService와 동일한 안전장치).
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Async(PropertyRegistryRiskScanAsyncConfig.EXECUTOR_NAME)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handlePropertySaved(PropertySavedEvent event) {
         try {
