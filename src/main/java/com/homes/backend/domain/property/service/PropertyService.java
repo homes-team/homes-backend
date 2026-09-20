@@ -3,6 +3,7 @@ package com.homes.backend.domain.property.service;
 import com.homes.backend.domain.property.dto.request.PropertyCreateReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyMapSearchReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyUpdateReqDto;
+import com.homes.backend.domain.property.building.event.BuildingInformationCollectionRequestedEvent;
 import com.homes.backend.domain.bid.entity.Bid;
 import com.homes.backend.domain.bid.entity.BidStatus;
 import com.homes.backend.domain.bid.repository.BidRepository;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -134,6 +136,7 @@ public class PropertyService {
 
         Long savedPropertyId = propertyRepository.save(property).getId();
         eventPublisher.publishEvent(new PropertySavedEvent(savedPropertyId));
+        eventPublisher.publishEvent(new BuildingInformationCollectionRequestedEvent(savedPropertyId));
 
         return savedPropertyId;
     }
@@ -240,6 +243,7 @@ public class PropertyService {
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
 
         validateOwnership(property, userId);
+        boolean addressChanged = !Objects.equals(property.getAddress(), reqDto.address());
 
         /*
          * 수정된 데이터에 맞춰 위경도 Point 변환 및 자동 부제목 재조립
@@ -301,6 +305,9 @@ public class PropertyService {
         }
 
         eventPublisher.publishEvent(new PropertySavedEvent(propertyId));
+        if (addressChanged) {
+            eventPublisher.publishEvent(new BuildingInformationCollectionRequestedEvent(propertyId));
+        }
     }
 
     /**

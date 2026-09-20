@@ -5,6 +5,7 @@ import com.homes.backend.domain.property.building.entity.PropertyBuildingInforma
 import com.homes.backend.domain.property.building.repository.PropertyBuildingInformationRepository;
 import com.homes.backend.domain.property.entity.Property;
 import com.homes.backend.domain.property.repository.PropertyRepository;
+import com.homes.backend.domain.property.insight.repository.PropertyAiEvaluationRepository;
 import com.homes.backend.domain.user.entity.User;
 import com.homes.backend.global.geocoding.GeocodingService;
 import com.homes.backend.global.geocoding.ResolvedAddress;
@@ -19,6 +20,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,6 +31,7 @@ class PropertyBuildingInformationServiceTest {
     @Mock BuildingRegisterClient buildingRegisterClient;
     @Mock ApartmentComplexClient apartmentComplexClient;
     @Mock ApartmentBasisClient apartmentBasisClient;
+    @Mock PropertyAiEvaluationRepository evaluationRepository;
     @Mock Property property;
     @Mock User owner;
 
@@ -40,7 +43,7 @@ class PropertyBuildingInformationServiceTest {
     @BeforeEach
     void setUp() {
         service = new PropertyBuildingInformationService(propertyRepository, informationRepository, geocodingService,
-                buildingRegisterClient, apartmentComplexClient, apartmentBasisClient);
+                buildingRegisterClient, apartmentComplexClient, apartmentBasisClient, evaluationRepository);
     }
 
     /**
@@ -75,5 +78,6 @@ class PropertyBuildingInformationServiceTest {
         assertThat(response.buildingCount()).isEqualTo(8);
         assertThat(response.parkingCount()).isEqualTo(540);
         assertThat(response.status()).isEqualTo("RESOLVED");
+        verify(evaluationRepository).deleteById(1L);
     }
 }

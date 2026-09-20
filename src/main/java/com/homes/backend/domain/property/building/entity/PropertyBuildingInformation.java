@@ -49,15 +49,20 @@ public class PropertyBuildingInformation implements Persistable<Long> {
     private Integer parkingCount;
     private String corridorType;
     private String heatingType;
+    private String requestedAddress;
+    private Integer retryCount;
+    private LocalDateTime lastAttemptAt;
+    private String lastErrorCode;
+
+    @Column(length = 500)
+    private String lastErrorMessage;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private BuildingInformationStatus status;
 
-    @Column(nullable = false)
     private String dataSources;
 
-    @Column(nullable = false)
     private LocalDateTime collectedAt;
 
     @Transient
@@ -69,6 +74,39 @@ public class PropertyBuildingInformation implements Persistable<Long> {
     public PropertyBuildingInformation(Property property) {
         this.property = property;
         this.propertyId = property.getId();
+        this.status = BuildingInformationStatus.PENDING;
+        this.requestedAddress = property.getAddress();
+        this.retryCount = 0;
+    }
+
+    public boolean queue(String address) {
+        if (status == BuildingInformationStatus.PROCESSING) {
+            return false;
+        }
+        if ((status == BuildingInformationStatus.RESOLVED || status == BuildingInformationStatus.PARTIAL)
+                && java.util.Objects.equals(requestedAddress, address)) {
+            return false;
+        }
+        requestedAddress = address;
+        retryCount = 0;
+        lastErrorCode = null;
+        lastErrorMessage = null;
+        status = BuildingInformationStatus.PENDING;
+        return true;
+    }
+
+    public void beginAttempt() {
+        status = BuildingInformationStatus.PROCESSING;
+        retryCount = retryCount == null ? 1 : retryCount + 1;
+        lastAttemptAt = LocalDateTime.now();
+        lastErrorCode = null;
+        lastErrorMessage = null;
+    }
+
+    public void fail(String errorCode, String errorMessage) {
+        status = BuildingInformationStatus.FAILED;
+        lastErrorCode = errorCode;
+        lastErrorMessage = errorMessage;
     }
 
     /**
@@ -129,6 +167,8 @@ public class PropertyBuildingInformation implements Persistable<Long> {
         status = buildingRegisterId != null && approvalDate != null ? BuildingInformationStatus.RESOLVED : BuildingInformationStatus.PARTIAL;
         dataSources = apartment == null ? "BUILDING_REGISTER" : "BUILDING_REGISTER,K_APT";
         collectedAt = LocalDateTime.now();
+        lastErrorCode = null;
+        lastErrorMessage = null;
     }
 
     /**
