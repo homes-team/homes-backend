@@ -10,6 +10,7 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.domain.Persistable;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -18,7 +19,7 @@ import java.time.LocalDateTime;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "property_building_information")
-public class PropertyBuildingInformation {
+public class PropertyBuildingInformation implements Persistable<Long> {
     @Id
     @Column(name = "property_id")
     private Long propertyId;
@@ -59,12 +60,40 @@ public class PropertyBuildingInformation {
     @Column(nullable = false)
     private LocalDateTime collectedAt;
 
+    @Transient
+    private boolean newEntity = true;
+
     /**
      * Associates a new building-information record with its property.
      */
     public PropertyBuildingInformation(Property property) {
         this.property = property;
         this.propertyId = property.getId();
+    }
+
+    /**
+     * Exposes the property-shared primary key to Spring Data.
+     */
+    @Override
+    public Long getId() {
+        return propertyId;
+    }
+
+    /**
+     * Ensures a new shared-primary-key record is inserted even though its ID is already assigned.
+     */
+    @Override
+    public boolean isNew() {
+        return newEntity;
+    }
+
+    /**
+     * Marks persisted and loaded records as existing so subsequent saves update them.
+     */
+    @PostLoad
+    @PostPersist
+    void markNotNew() {
+        newEntity = false;
     }
 
     /**
