@@ -14,6 +14,7 @@ import com.homes.backend.domain.verification.exception.VerificationErrorCode;
 import com.homes.backend.domain.verification.repository.RealtorVerificationRepository;
 import com.homes.backend.global.exception.CustomException;
 import com.homes.backend.global.util.ExifData;
+import com.homes.backend.global.util.VisionApiService;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -35,6 +36,7 @@ public class RealtorVerificationService {
 
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
     private static final double MAX_ALLOWED_DISTANCE_METERS = 100.0;
+    private final VisionApiService visionApiService;
 
     @Transactional
     public VerificationStatus verifyOnSite(Long propertyId, Long userId, RealtorVerificationReqDto reqDto, ExifData exifData) {
@@ -68,8 +70,14 @@ public class RealtorVerificationService {
         LocalDateTime oneHourAgo = now.minusHours(1);
         LocalDateTime fiveMinsLater = now.plusMinutes(5); // 스마트폰 기기 간 시간 오차 5분 허용
 
+        // 과거
         if (exifData.originalDate().isBefore(oneHourAgo)) {
             throw new CustomException(VerificationErrorCode.EXIF_TIME_EXPIRED);
+        }
+
+        // 미래
+        if (exifData.originalDate().isAfter(fiveMinsLater)) {
+            throw new CustomException(VerificationErrorCode.EXIF_TIME_FUTURE);
         }
 
         // --- 사진에 기록된 GPS 기반 거리 검증 ---
@@ -85,11 +93,18 @@ public class RealtorVerificationService {
         Point realtorLocation = geometryFactory.createPoint(new Coordinate(reqDto.longitude(), reqDto.latitude()));
         Double distanceMeter = propertyRepository.calculateDistanceToProperty(propertyId, realtorLocation);
 
-        // TODO: EXIF 데이터는 위조가 가능하므로(CWE-345), 추후 Google Vision API(역이미지 검색)를 도입하여
-        // 2차 검증을 수행하거나 MANUAL_REVIEW 상태로 전환하는 로직을 고도화할 예정.
         VerificationStatus status = (distanceMeter != null && distanceMeter <= MAX_ALLOWED_DISTANCE_METERS)
                 ? VerificationStatus.APPROVED
                 : VerificationStatus.REJECTED;
+
+        // --- 도용 사진(역이미지 검색) 검사 (거리 검증을 통과한 경우에만 수행) ---
+        if (status == VerificationStatus.APPROVED) {
+            boolean isStolen = visionApiService.isStolenImage(reqDto.photoUrl());
+            if (isStolen) {
+                // 도용이 확인되면 에러를 던짐
+                throw new CustomException(VerificationErrorCode.STOLEN_IMAGE_DETECTED);
+            }
+        }
 
         RealtorVerification verification = RealtorVerification.builder()
                 .property(property)
