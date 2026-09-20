@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URL;
 
@@ -24,8 +25,22 @@ public class ImageDownloadUtil {
                 throw new CustomException(VerificationErrorCode.INVALID_IMAGE_URL);
             }
 
+            //  DNS Resolution 및 사설/내부 IP 차단 (DNS Rebinding 방어)
+            InetAddress[] addresses = InetAddress.getAllByName(host);
+            for (InetAddress address : addresses) {
+                if (address.isAnyLocalAddress() ||      // 0.0.0.0 등
+                        address.isLoopbackAddress() ||      // 127.0.0.1, ::1 등
+                        address.isLinkLocalAddress() ||     // 169.254.x.x (AWS 메타데이터 등)
+                        address.isSiteLocalAddress()) {     // 192.168.x.x, 10.x.x.x 등 사설 IP
+                    throw new CustomException(VerificationErrorCode.INVALID_IMAGE_URL);
+                }
+            }
+
             URL url = uri.toURL();
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+            // 리다이렉션을 통한 SSRF 우회 원천 차단 (비활성화)
+            conn.setInstanceFollowRedirects(false);
 
             // DoS 방어: 타임아웃 설정
             conn.setConnectTimeout(TIMEOUT_MS);
