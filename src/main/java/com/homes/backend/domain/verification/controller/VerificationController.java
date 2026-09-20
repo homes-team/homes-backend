@@ -10,6 +10,7 @@ import com.homes.backend.global.response.ApiResponse;
 import com.homes.backend.global.security.UserPrincipal;
 import com.homes.backend.global.util.ExifData;
 import com.homes.backend.global.util.ExifExtractor;
+import com.homes.backend.global.util.ImageDownloadUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 public class VerificationController implements VerificationControllerDocs {
     private final RealtorVerificationService realtorVerificationService;
     private final ExifExtractor exifExtractor;
+    private final ImageDownloadUtil imageDownloadUtil;
 
     @Override
     @PostMapping
@@ -37,14 +39,17 @@ public class VerificationController implements VerificationControllerDocs {
             throw new CustomException(VerificationErrorCode.INVALID_IMAGE_URL);
         }
 
-        // 진짜 사진 메타데이터(EXIF) 추출
-        ExifData exifData = exifExtractor.extractExif(photoUrl);
+        // SSRF 방어 및 용량 제한이 적용된 안전한 다운로드 실행 (단 1회만 다운로드)
+        byte[] downloadedImageBytes = imageDownloadUtil.downloadImageSecurely(photoUrl);
+
+        // 다운로드 된 바이트 배열을 넘겨서 EXIF 추출
+        ExifData exifData = exifExtractor.extractExif(downloadedImageBytes);
         if (exifData == null) {
             throw new CustomException(VerificationErrorCode.EXIF_NOT_FOUND);
         }
 
         // 검증 로직 실행
-        VerificationStatus status = realtorVerificationService.verifyOnSite(propertyId, userId, reqDto, exifData);
+        VerificationStatus status = realtorVerificationService.verifyOnSite(propertyId, userId, reqDto, exifData, downloadedImageBytes);
 
         // 100m 초과로 반려된 경우 (중개사 위치)
         if (status == VerificationStatus.REJECTED) {

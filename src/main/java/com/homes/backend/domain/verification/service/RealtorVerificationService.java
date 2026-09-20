@@ -39,7 +39,7 @@ public class RealtorVerificationService {
     private final VisionApiService visionApiService;
 
     @Transactional
-    public VerificationStatus verifyOnSite(Long propertyId, Long userId, RealtorVerificationReqDto reqDto, ExifData exifData) {
+    public VerificationStatus verifyOnSite(Long propertyId, Long userId, RealtorVerificationReqDto reqDto, ExifData exifData, byte[] imageBytes) {
         Property property = propertyRepository.findByIdWithPessimisticLock(propertyId)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
 
@@ -99,7 +99,7 @@ public class RealtorVerificationService {
 
         // --- 도용 사진(역이미지 검색) 검사 (거리 검증을 통과한 경우에만 수행) ---
         if (status == VerificationStatus.APPROVED) {
-            boolean isStolen = visionApiService.isStolenImage(reqDto.photoUrl());
+            boolean isStolen = visionApiService.isStolenImage(imageBytes);
             if (isStolen) {
                 // 도용이 확인되면 에러를 던짐
                 throw new CustomException(VerificationErrorCode.STOLEN_IMAGE_DETECTED);
