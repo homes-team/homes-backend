@@ -58,3 +58,6 @@ CLAUDE.md
 claude.md
 *.claude
 .claude_cache/
+
+# Google Cloud Vision API Key
+google-vision-key.json
