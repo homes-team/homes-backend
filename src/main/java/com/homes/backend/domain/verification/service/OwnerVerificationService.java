@@ -13,6 +13,7 @@ import com.homes.backend.domain.verification.exception.VerificationErrorCode;
 import com.homes.backend.domain.verification.repository.OwnerVerificationRepository;
 import com.homes.backend.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -30,6 +31,11 @@ public class OwnerVerificationService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 매물 주인이 현재 요청한 유저가 맞는지 확인
+        if (!property.getUser().getId().equals(userId)) {
+            throw new CustomException(PropertyErrorCode.UNAUTHORIZED_ACCESS);
+        }
 
         // 실명(name)이 없거나 본인 인증을 안 한 유저면 튕겨냄
         if (!user.isIdentityVerified() || user.getName() == null || user.getName().isBlank()) {
@@ -58,7 +64,12 @@ public class OwnerVerificationService {
                 .status(VerificationStatus.PENDING)
                 .build();
 
-        ownerVerificationRepository.save(verification);
+        try {
+            ownerVerificationRepository.save(verification);
+        } catch (DataIntegrityViolationException e) {
+            // 연속 클릭으로 인해 DB에 이미 PENDING 데이터가 들어가려고 할 때 차단
+            throw new CustomException(VerificationErrorCode.OWNER_VERIFICATION_IN_PROGRESS);
+        }
 
         // 비동기 Worker에게 OCR 처리 지시 (메서드는 여기서 종료되고 프론트에 바로 응답 됨)
         // (주의: 트랜잭션 분리를 위해 생성된 verification의 ID와 유저 실명을 넘김)

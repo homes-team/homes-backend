@@ -22,8 +22,10 @@ public class VisionApiService {
     public boolean isStolenImage(byte[] imageBytes) {
         try {
             // JSON 키 파일 로드
-            InputStream keyStream = new ClassPathResource("google-vision-key.json").getInputStream();
-            GoogleCredentials credentials = GoogleCredentials.fromStream(keyStream);
+            GoogleCredentials credentials;
+            try (InputStream keyStream = new ClassPathResource("google-vision-key.json").getInputStream()) {
+                credentials = GoogleCredentials.fromStream(keyStream);
+            }
 
             ImageAnnotatorSettings settings = ImageAnnotatorSettings.newBuilder()
                     .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
@@ -74,8 +76,10 @@ public class VisionApiService {
      */
     public String extractTextFromImage(byte[] imageBytes) {
         try {
-            InputStream keyStream = new ClassPathResource("google-vision-key.json").getInputStream();
-            GoogleCredentials credentials = GoogleCredentials.fromStream(keyStream);
+            GoogleCredentials credentials;
+            try (InputStream keyStream = new ClassPathResource("google-vision-key.json").getInputStream()) {
+                credentials = GoogleCredentials.fromStream(keyStream);
+            }
 
             ImageAnnotatorSettings settings = ImageAnnotatorSettings.newBuilder()
                     .setCredentialsProvider(FixedCredentialsProvider.create(credentials))

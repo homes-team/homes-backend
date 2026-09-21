@@ -34,7 +34,7 @@ public class OwnerVerificationWorker {
 
             // 구글 Vision API로 텍스트 추출
             String extractedText = visionApiService.extractTextFromImage(imageBytes);
-            log.info("추출된 OCR 텍스트: \n{}", extractedText);
+            log.info("OCR 텍스트 추출 완료 (길이: {})", extractedText.length());
 
             // 정규식 이름 대조 로직
             boolean isMatched = checkOwnerNameWithRegex(extractedText, realName);
