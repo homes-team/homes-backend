@@ -17,7 +17,9 @@ public enum VerificationErrorCode implements BaseErrorCode {
     STOLEN_IMAGE_DETECTED("VERIFY400_8", "인터넷 도용 사진으로 판별되어 현장 인증이 반려되었습니다.", HttpStatus.BAD_REQUEST),
     INVALID_IMAGE_URL("VERIFY400_6", "허용되지 않거나 안전하지 않은 이미지 URL입니다.", HttpStatus.BAD_REQUEST),
     REALTOR_GPS_NOT_MATCH("VERIFY400_9", "매물 위치 반경 100m를 벗어나 현장 인증이 반려되었습니다.", HttpStatus.BAD_REQUEST),
-    VISION_API_ERROR("VERIFY500_1", "이미지 검증 서버 통신에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+    VISION_API_ERROR("VERIFY500_1", "이미지 검증 서버 통신에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+    OWNER_ALREADY_VERIFIED("VERIFY400_10", "이미 집주인 서류 인증이 완료된 매물입니다.", HttpStatus.BAD_REQUEST),
+    OWNER_VERIFICATION_IN_PROGRESS("VERIFY400_11", "현재 집주인 서류 인증이 처리 중입니다. 잠시 후 다시 확인해주세요.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;

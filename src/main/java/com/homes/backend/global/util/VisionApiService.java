@@ -16,11 +16,16 @@ import java.util.List;
 @Slf4j
 @Component
 public class VisionApiService {
+    /**
+     * 역이미지 검색 (중개사 현장 인증 - 도용 방지용)
+     */
     public boolean isStolenImage(byte[] imageBytes) {
         try {
             // JSON 키 파일 로드
-            InputStream keyStream = new ClassPathResource("google-vision-key.json").getInputStream();
-            GoogleCredentials credentials = GoogleCredentials.fromStream(keyStream);
+            GoogleCredentials credentials;
+            try (InputStream keyStream = new ClassPathResource("google-vision-key.json").getInputStream()) {
+                credentials = GoogleCredentials.fromStream(keyStream);
+            }
 
             ImageAnnotatorSettings settings = ImageAnnotatorSettings.newBuilder()
                     .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
@@ -64,5 +69,51 @@ public class VisionApiService {
             throw new CustomException(VerificationErrorCode.VISION_API_ERROR);
         }
         return false; // 도용 내역이 없으면 false 반환
+    }
+
+    /**
+     * OCR 텍스트 추출 (집주인 등기부등본 인증용)
+     */
+    public String extractTextFromImage(byte[] imageBytes) {
+        try {
+            GoogleCredentials credentials;
+            try (InputStream keyStream = new ClassPathResource("google-vision-key.json").getInputStream()) {
+                credentials = GoogleCredentials.fromStream(keyStream);
+            }
+
+            ImageAnnotatorSettings settings = ImageAnnotatorSettings.newBuilder()
+                    .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+                    .build();
+
+            try (ImageAnnotatorClient client = ImageAnnotatorClient.create(settings)) {
+                ByteString imgBytes = ByteString.copyFrom(imageBytes);
+                Image img = Image.newBuilder().setContent(imgBytes).build();
+
+                // 텍스트 추출
+                Feature feat = Feature.newBuilder().setType(Feature.Type.DOCUMENT_TEXT_DETECTION).build();
+                AnnotateImageRequest request = AnnotateImageRequest.newBuilder()
+                        .addFeatures(feat)
+                        .setImage(img)
+                        .build();
+
+                BatchAnnotateImagesResponse response = client.batchAnnotateImages(List.of(request));
+
+                for (AnnotateImageResponse res : response.getResponsesList()) {
+                    if (res.hasError()) {
+                        log.error("Vision OCR 에러: {}", res.getError().getMessage());
+                        throw new CustomException(VerificationErrorCode.VISION_API_ERROR);
+                    }
+
+                    // 이미지 안의 모든 텍스트를 추출하여 통째로 반환
+                    return res.getFullTextAnnotation().getText();
+                }
+            }
+        } catch (CustomException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Vision OCR 연동 중 오류 발생: {}", e.getMessage());
+            throw new CustomException(VerificationErrorCode.VISION_API_ERROR);
+        }
+        return "";
     }
 }

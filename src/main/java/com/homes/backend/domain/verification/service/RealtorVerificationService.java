@@ -8,9 +8,11 @@ import com.homes.backend.domain.realtor.exception.RealtorErrorCode;
 import com.homes.backend.domain.realtor.repository.AgentRepository;
 import com.homes.backend.domain.verification.dto.request.RealtorVerificationReqDto;
 import com.homes.backend.domain.verification.dto.response.VerificationStatusRespDto;
+import com.homes.backend.domain.verification.entity.OwnerVerification;
 import com.homes.backend.domain.verification.entity.RealtorVerification;
 import com.homes.backend.domain.verification.entity.VerificationStatus;
 import com.homes.backend.domain.verification.exception.VerificationErrorCode;
+import com.homes.backend.domain.verification.repository.OwnerVerificationRepository;
 import com.homes.backend.domain.verification.repository.RealtorVerificationRepository;
 import com.homes.backend.global.exception.CustomException;
 import com.homes.backend.global.util.ExifData;
@@ -33,6 +35,7 @@ public class RealtorVerificationService {
     private final PropertyRepository propertyRepository;
     private final AgentRepository agentRepository;
     private final RealtorVerificationRepository realtorVerificationRepository;
+    private final OwnerVerificationRepository ownerVerificationRepository;
 
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
     private static final double MAX_ALLOWED_DISTANCE_METERS = 100.0;
@@ -126,6 +129,7 @@ public class RealtorVerificationService {
             throw new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND);
         }
 
+        // 중개사 현장 인증 상태 조회
         RealtorVerification latestVerification = realtorVerificationRepository
                 .findTopByPropertyIdOrderByRequestedAtDesc(propertyId)
                 .orElse(null);
@@ -133,6 +137,15 @@ public class RealtorVerificationService {
         boolean isRealtorVerified = (latestVerification != null && latestVerification.getStatus() == VerificationStatus.APPROVED);
         VerificationStatus realtorStatus = (latestVerification != null) ? latestVerification.getStatus() : null;
 
-        return new VerificationStatusRespDto(false, isRealtorVerified, realtorStatus);
+        // 집주인 서류 인증 상태 조회
+        OwnerVerification latestOwner = ownerVerificationRepository
+                .findTopByPropertyIdOrderByRequestedAtDesc(propertyId)
+                .orElse(null);
+        boolean isOwnerVerified = (latestOwner != null && latestOwner.getStatus() == VerificationStatus.APPROVED);
+
+        // 집주인 서류 인증 상태 상세 조회
+        VerificationStatus ownerStatus = (latestOwner != null) ? latestOwner.getStatus() : null;
+
+        return new VerificationStatusRespDto(isOwnerVerified, ownerStatus, isRealtorVerified, realtorStatus);
     }
 }

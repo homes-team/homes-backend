@@ -34,6 +34,15 @@ public class ImageDownloadUtil {
                         address.isSiteLocalAddress()) {     // 192.168.x.x, 10.x.x.x 등 사설 IP
                     throw new CustomException(VerificationErrorCode.INVALID_IMAGE_URL);
                 }
+
+                // IPv6 ULA 차단
+                byte[] ip = address.getAddress();
+                if (ip.length == 16) { // IPv6인 경우
+                    // 첫 바이트가 0xFC 또는 0xFD 이면 ULA 대역임
+                    if ((ip[0] & 0xFE) == (byte) 0xFC) {
+                        throw new CustomException(VerificationErrorCode.INVALID_IMAGE_URL);
+                    }
+                }
             }
 
             URL url = uri.toURL();

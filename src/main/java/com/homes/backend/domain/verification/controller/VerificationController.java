@@ -1,9 +1,11 @@
 package com.homes.backend.domain.verification.controller;
 
+import com.homes.backend.domain.verification.dto.request.OwnerVerificationReqDto;
 import com.homes.backend.domain.verification.dto.request.RealtorVerificationReqDto;
 import com.homes.backend.domain.verification.dto.response.VerificationStatusRespDto;
 import com.homes.backend.domain.verification.entity.VerificationStatus;
 import com.homes.backend.domain.verification.exception.VerificationErrorCode;
+import com.homes.backend.domain.verification.service.OwnerVerificationService;
 import com.homes.backend.domain.verification.service.RealtorVerificationService;
 import com.homes.backend.global.exception.CustomException;
 import com.homes.backend.global.response.ApiResponse;
@@ -23,6 +25,7 @@ public class VerificationController implements VerificationControllerDocs {
     private final RealtorVerificationService realtorVerificationService;
     private final ExifExtractor exifExtractor;
     private final ImageDownloadUtil imageDownloadUtil;
+    private final OwnerVerificationService ownerVerificationService;
 
     @Override
     @PostMapping
@@ -67,5 +70,19 @@ public class VerificationController implements VerificationControllerDocs {
     ) {
         VerificationStatusRespDto response = realtorVerificationService.getVerificationStatus(propertyId);
         return ApiResponse.onSuccess(response);
+    }
+
+    @Override
+    @PostMapping("/owner")
+    public ApiResponse<String> requestOwnerVerification(
+            @PathVariable Long propertyId,
+            @Valid @RequestBody OwnerVerificationReqDto reqDto,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        // 집주인 서류 인증 요청 (비동기로 돌아가므로 곧바로 리턴됨)
+        ownerVerificationService.requestOwnerVerification(propertyId, userPrincipal.getId(), reqDto);
+
+        // 프론트엔드에 요청 성공 응답만 먼저 보냄
+        return ApiResponse.onSuccess("집주인 서류 인증이 요청되었습니다. 1~2분 후 상태를 확인해주세요.");
     }
 }
