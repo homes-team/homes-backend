@@ -1,5 +1,6 @@
 package com.homes.backend.domain.verification.controller;
 
+import com.homes.backend.domain.verification.dto.request.OwnerVerificationReqDto;
 import com.homes.backend.domain.verification.dto.request.RealtorVerificationReqDto;
 import com.homes.backend.domain.verification.dto.response.VerificationStatusRespDto;
 import com.homes.backend.global.response.ApiResponse;
@@ -11,7 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 
-@Tag(name = "Verification", description = "매물 인증 (집주인 서류 / 중개사 현장) API")
+@Tag(name = "인증(Verification) API", description = "매물 인증 (집주인 서류 / 중개사 현장) API")
 public interface VerificationControllerDocs {
 
     @Operation(summary = "중개사 현장 인증 요청", description = "중개사가 매물 현장에서 GPS 좌표와 사진을 전송하여 실매물임을 인증합니다. (오차 반경 100m 이내 자동 승인)")
@@ -24,5 +25,12 @@ public interface VerificationControllerDocs {
     @Operation(summary = "매물 인증 상태 조회", description = "특정 매물의 현재 인증 상태(집주인 서류 인증 여부, 중개사 현장 인증 상태)를 조회합니다.")
     ApiResponse<VerificationStatusRespDto> getVerificationStatus(
             @Parameter(description = "조회할 매물의 ID", example = "1") @PathVariable Long propertyId
+    );
+
+    @Operation(summary = "집주인 서류 인증 요청", description = "집주인이 발급받은 등기부등본 이미지 URL을 전송하여 소유자 일치 여부를 비동기(OCR)로 검증합니다. (요청 시 즉시 응답하며 백그라운드에서 처리됨)")
+    ApiResponse<String> requestOwnerVerification(
+            @Parameter(description = "인증할 매물의 ID", example = "1") @PathVariable Long propertyId,
+            @RequestBody OwnerVerificationReqDto reqDto,
+            @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal
     );
 }

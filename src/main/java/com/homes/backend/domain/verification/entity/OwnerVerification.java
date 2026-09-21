@@ -2,6 +2,7 @@ package com.homes.backend.domain.verification.entity;
 
 import com.homes.backend.domain.property.entity.Property;
 import com.homes.backend.domain.user.entity.User;
+import com.homes.backend.global.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -19,7 +20,7 @@ import java.time.LocalDateTime;
 /**
  * 집주인 서류 인증
  */
-public class OwnerVerification {
+public class OwnerVerification extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "owner_verification_id")
@@ -32,6 +33,9 @@ public class OwnerVerification {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @Column(length = 2000)
+    private String documentUrl; // 등기부등본 원본 이미지 URL (관리자 확인용)
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

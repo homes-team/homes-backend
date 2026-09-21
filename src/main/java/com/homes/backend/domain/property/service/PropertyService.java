@@ -53,6 +53,11 @@ public class PropertyService {
         User user=userRepository.findById(userId)
                 .orElseThrow(()-> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
+        // 실명 인증(본인 인증)을 하지 않은 유저는 매물 등록 불가
+        if (!user.isIdentityVerified()) {
+            throw new CustomException(UserErrorCode.IDENTITY_VERIFICATION_NOT_COMPLETED);
+        }
+
         /*
          *  Double 위도/경도를 공간 데이터(Point)로 변환
          *  (Coordinate는 X(경도), Y(위도) 순서로 넣음)
