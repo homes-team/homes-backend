@@ -65,7 +65,7 @@ public class OwnerVerificationService {
                 .build();
 
         try {
-            ownerVerificationRepository.save(verification);
+            ownerVerificationRepository.saveAndFlush(verification);
         } catch (DataIntegrityViolationException e) {
             // 연속 클릭으로 인해 DB에 이미 PENDING 데이터가 들어가려고 할 때 차단
             throw new CustomException(VerificationErrorCode.OWNER_VERIFICATION_IN_PROGRESS);

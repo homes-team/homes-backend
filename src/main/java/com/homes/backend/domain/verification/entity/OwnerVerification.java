@@ -59,4 +59,12 @@ public class OwnerVerification extends BaseEntity {
         this.failReason = failReason;
         this.processedAt = LocalDateTime.now();
     }
+
+    /**
+     * 관리자 수동 검수 처리
+     */
+    public void processAdminReview(VerificationStatus newStatus) {
+        this.status = newStatus;
+        this.processedAt = java.time.LocalDateTime.now(); // 처리 시간 업데이트
+    }
 }
