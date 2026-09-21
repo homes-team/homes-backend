@@ -34,7 +34,8 @@ public class AdminVerificationService {
      */
     @Transactional
     public void processManualReview(Long verificationId, AdminOwnerVerificationUpdateReqDto reqDto) {
-        OwnerVerification verification = ownerVerificationRepository.findById(verificationId)
+        //락(Lock)
+        OwnerVerification verification = ownerVerificationRepository.findByIdWithLock(verificationId)
                 .orElseThrow(() -> new CustomException(VerificationErrorCode.VERIFICATION_NOT_FOUND));
 
         // 이미 처리된 건인지 방어 로직

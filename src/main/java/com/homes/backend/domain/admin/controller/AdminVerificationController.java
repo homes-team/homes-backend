@@ -4,6 +4,7 @@ import com.homes.backend.domain.admin.dto.request.AdminOwnerVerificationUpdateRe
 import com.homes.backend.domain.admin.dto.response.AdminOwnerVerificationListResDto;
 import com.homes.backend.domain.admin.service.AdminVerificationService;
 import com.homes.backend.global.response.ApiResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -30,7 +31,7 @@ public class AdminVerificationController implements AdminVerificationControllerD
     @Override
     public ApiResponse<Void> processManualReview(
             @PathVariable Long verificationId,
-            @RequestBody AdminOwnerVerificationUpdateReqDto reqDto) {
+            @RequestBody @Valid AdminOwnerVerificationUpdateReqDto reqDto) {
 
         adminVerificationService.processManualReview(verificationId, reqDto);
         return ApiResponse.onSuccess();
