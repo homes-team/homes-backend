@@ -12,14 +12,19 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Persistable;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Objects;
+import java.util.UUID;
 
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "property_building_information")
 public class PropertyBuildingInformation implements Persistable<Long> {
+    public static final Duration PROCESSING_TIMEOUT = Duration.ofMinutes(10);
+
     @Id
     @Column(name = "property_id")
     private Long propertyId;
@@ -52,6 +57,10 @@ public class PropertyBuildingInformation implements Persistable<Long> {
     private String requestedAddress;
     private Integer retryCount;
     private LocalDateTime lastAttemptAt;
+
+    @Column(length = 36)
+    private String processingToken;
+
     private String lastErrorCode;
 
     @Column(length = 500)
@@ -80,31 +89,94 @@ public class PropertyBuildingInformation implements Persistable<Long> {
     }
 
     public boolean queue(String address) {
+        return queue(address, LocalDateTime.now());
+    }
+
+    public boolean queue(String address, LocalDateTime now) {
         if (status == BuildingInformationStatus.PROCESSING) {
+            if (lastAttemptAt == null || lastAttemptAt.plus(PROCESSING_TIMEOUT).isBefore(now)) {
+                resetPending(address);
+                return true;
+            }
+            if (!Objects.equals(requestedAddress, address)) {
+                requestedAddress = address;
+                retryCount = 0;
+                lastErrorCode = null;
+                lastErrorMessage = null;
+            }
             return false;
+        }
+        if (status == BuildingInformationStatus.PENDING && Objects.equals(requestedAddress, address)) {
+            return newEntity;
         }
         if ((status == BuildingInformationStatus.RESOLVED || status == BuildingInformationStatus.PARTIAL)
-                && java.util.Objects.equals(requestedAddress, address)) {
+                && Objects.equals(requestedAddress, address)) {
             return false;
         }
-        requestedAddress = address;
-        retryCount = 0;
-        lastErrorCode = null;
-        lastErrorMessage = null;
-        status = BuildingInformationStatus.PENDING;
+        resetPending(address);
         return true;
     }
 
-    public void beginAttempt() {
-        status = BuildingInformationStatus.PROCESSING;
-        retryCount = retryCount == null ? 1 : retryCount + 1;
-        lastAttemptAt = LocalDateTime.now();
+    private void resetPending(String address) {
+        requestedAddress = address;
+        retryCount = 0;
+        processingToken = null;
         lastErrorCode = null;
         lastErrorMessage = null;
+        status = BuildingInformationStatus.PENDING;
+    }
+
+    public String claim(LocalDateTime now) {
+        if (status == BuildingInformationStatus.PROCESSING
+                && lastAttemptAt != null
+                && !lastAttemptAt.plus(PROCESSING_TIMEOUT).isBefore(now)) {
+            return null;
+        }
+        if (status == BuildingInformationStatus.PROCESSING) {
+            status = BuildingInformationStatus.PENDING;
+            processingToken = null;
+        }
+        if (status != BuildingInformationStatus.PENDING) {
+            return null;
+        }
+
+        processingToken = UUID.randomUUID().toString();
+        status = BuildingInformationStatus.PROCESSING;
+        retryCount = retryCount == null ? 1 : retryCount + 1;
+        lastAttemptAt = now;
+        lastErrorCode = null;
+        lastErrorMessage = null;
+        return processingToken;
+    }
+
+    public boolean renewAttempt(String token, String address, LocalDateTime now) {
+        if (!isCurrentAttempt(token, address)) {
+            requeueIfSuperseded(token, address);
+            return false;
+        }
+        retryCount = retryCount == null ? 1 : retryCount + 1;
+        lastAttemptAt = now;
+        return true;
+    }
+
+    public boolean isCurrentAttempt(String token, String address) {
+        return status == BuildingInformationStatus.PROCESSING
+                && Objects.equals(processingToken, token)
+                && Objects.equals(requestedAddress, address);
+    }
+
+    public void requeueIfSuperseded(String token, String address) {
+        if (status == BuildingInformationStatus.PROCESSING
+                && Objects.equals(processingToken, token)
+                && !Objects.equals(requestedAddress, address)) {
+            status = BuildingInformationStatus.PENDING;
+            processingToken = null;
+        }
     }
 
     public void fail(String errorCode, String errorMessage) {
         status = BuildingInformationStatus.FAILED;
+        processingToken = null;
         lastErrorCode = errorCode;
         lastErrorMessage = errorMessage;
     }
@@ -165,6 +237,7 @@ public class PropertyBuildingInformation implements Persistable<Long> {
         corridorType = apartment == null ? null : apartment.corridorType();
         heatingType = apartment == null ? null : apartment.heatingType();
         status = buildingRegisterId != null && approvalDate != null ? BuildingInformationStatus.RESOLVED : BuildingInformationStatus.PARTIAL;
+        processingToken = null;
         dataSources = apartment == null ? "BUILDING_REGISTER" : "BUILDING_REGISTER,K_APT";
         collectedAt = LocalDateTime.now();
         lastErrorCode = null;

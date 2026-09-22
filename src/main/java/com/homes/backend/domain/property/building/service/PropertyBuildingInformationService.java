@@ -12,10 +12,16 @@ import com.homes.backend.global.exception.CustomException;
 import com.homes.backend.global.geocoding.GeocodingService;
 import com.homes.backend.global.geocoding.ResolvedAddress;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+
+import static com.homes.backend.domain.property.building.entity.PropertyBuildingInformation.PROCESSING_TIMEOUT;
 
 @Service
 @RequiredArgsConstructor
@@ -49,41 +55,79 @@ public class PropertyBuildingInformationService {
             throw new CustomException(PropertyErrorCode.UNAUTHORIZED_ACCESS);
         }
 
-        return BuildingInformationRespDto.from(collect(property));
+        return BuildingInformationRespDto.from(collect(property, loadCollection(property.getAddress())));
     }
 
     @Transactional
     public boolean prepareAutomaticCollection(Long propertyId) {
-        Property property = ensurePropertyExists(propertyId);
-        PropertyBuildingInformation information = informationRepository.findById(propertyId)
+        Property property = propertyRepository.findByIdWithPessimisticLock(propertyId)
+                .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+        PropertyBuildingInformation information = informationRepository.findByIdWithLock(propertyId)
                 .orElseGet(() -> new PropertyBuildingInformation(property));
         boolean queued = information.queue(property.getAddress());
-        if (queued) {
+        if (information.isNew()) {
             informationRepository.save(information);
         }
         return queued;
     }
 
     @Transactional
-    public void beginAutomaticAttempt(Long propertyId) {
-        PropertyBuildingInformation information = informationRepository.findById(propertyId)
+    public Optional<AutomaticCollectionAttempt> claimAutomaticCollection(Long propertyId) {
+        PropertyBuildingInformation information = informationRepository.findByIdWithLock(propertyId)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
-        information.beginAttempt();
+        String token = information.claim(LocalDateTime.now());
+        return token == null
+                ? Optional.empty()
+                : Optional.of(new AutomaticCollectionAttempt(token, information.getRequestedAddress()));
     }
 
     @Transactional
-    public void collectAutomatically(Long propertyId) {
-        collect(ensurePropertyExists(propertyId));
+    public boolean renewAutomaticAttempt(Long propertyId, AutomaticCollectionAttempt attempt) {
+        return informationRepository.findByIdWithLock(propertyId)
+                .map(information -> information.renewAttempt(
+                        attempt.token(), attempt.address(), LocalDateTime.now()))
+                .orElse(false);
     }
 
     @Transactional
-    public void markAutomaticFailure(Long propertyId, String errorCode, String errorMessage) {
-        informationRepository.findById(propertyId)
-                .ifPresent(information -> information.fail(errorCode, errorMessage));
+    public boolean collectAutomatically(Long propertyId, AutomaticCollectionAttempt attempt) {
+        CollectionData collection = loadCollection(attempt.address());
+        PropertyBuildingInformation information = informationRepository.findByIdWithLock(propertyId)
+                .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+        if (!information.isCurrentAttempt(attempt.token(), attempt.address())) {
+            information.requeueIfSuperseded(attempt.token(), attempt.address());
+            return false;
+        }
+
+        Integer previousBuildingYear = information.getBuildingYear();
+        refresh(information, collection);
+        if (!Objects.equals(previousBuildingYear, information.getBuildingYear())) {
+            evaluationRepository.deleteById(propertyId);
+        }
+        return true;
     }
 
-    private PropertyBuildingInformation collect(Property property) {
-        ResolvedAddress address = geocodingService.resolve(property.getAddress())
+    @Transactional
+    public void markAutomaticFailure(Long propertyId, AutomaticCollectionAttempt attempt,
+                                     String errorCode, String errorMessage) {
+        informationRepository.findByIdWithLock(propertyId).ifPresent(information -> {
+            if (information.isCurrentAttempt(attempt.token(), attempt.address())) {
+                information.fail(errorCode, errorMessage);
+            } else {
+                information.requeueIfSuperseded(attempt.token(), attempt.address());
+            }
+        });
+    }
+
+    @Transactional(readOnly = true)
+    public List<Long> findRecoverablePropertyIds(int limit) {
+        return informationRepository.findRecoverablePropertyIds(
+                LocalDateTime.now().minus(PROCESSING_TIMEOUT),
+                PageRequest.of(0, limit));
+    }
+
+    private CollectionData loadCollection(String requestedAddress) {
+        ResolvedAddress address = geocodingService.resolve(requestedAddress)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.BUILDING_ADDRESS_RESOLUTION_FAILED));
         BuildingRegisterTitle register = buildingRegisterClient.findTitle(address)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.BUILDING_INFORMATION_NOT_FOUND));
@@ -92,16 +136,24 @@ public class PropertyBuildingInformationService {
         ApartmentBasicInformation apartment = complex == null
                 ? null
                 : apartmentBasisClient.findBasicInformation(complex.kaptCode()).orElse(null);
+        return new CollectionData(address, register, recap, complex, apartment);
+    }
 
+    private PropertyBuildingInformation collect(Property property, CollectionData collection) {
         PropertyBuildingInformation information = informationRepository.findById(property.getId())
                 .orElseGet(() -> new PropertyBuildingInformation(property));
         Integer previousBuildingYear = information.getBuildingYear();
-        information.refresh(address, register, recap, complex, apartment);
+        refresh(information, collection);
         PropertyBuildingInformation saved = informationRepository.save(information);
         if (!Objects.equals(previousBuildingYear, saved.getBuildingYear())) {
             evaluationRepository.deleteById(property.getId());
         }
         return saved;
+    }
+
+    private void refresh(PropertyBuildingInformation information, CollectionData collection) {
+        information.refresh(collection.address(), collection.register(), collection.recap(),
+                collection.complex(), collection.apartment());
     }
 
     /**
@@ -110,5 +162,14 @@ public class PropertyBuildingInformationService {
     private Property ensurePropertyExists(Long propertyId) {
         return propertyRepository.findById(propertyId)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+    }
+
+    private record CollectionData(
+            ResolvedAddress address,
+            BuildingRegisterTitle register,
+            BuildingRegisterRecap recap,
+            ApartmentComplex complex,
+            ApartmentBasicInformation apartment
+    ) {
     }
 }
