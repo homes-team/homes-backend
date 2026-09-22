@@ -35,6 +35,7 @@ public class PropertyInsightService {
     private final PropertyAiEvaluationRepository evaluationRepository;
     private final DobongAiDataset dobongAiDataset;
     private final PropertyBuildingInformationRepository buildingInformationRepository;
+    private final PropertyEvaluationScorePolicy evaluationScorePolicy;
 
     /**
      * Builds the six-category AI evaluation for a property from stored or bundled data.
@@ -58,11 +59,14 @@ public class PropertyInsightService {
                 .orElseGet(() -> dataset.map(DobongAiDataset.Entry::transportationScore).orElse(null));
         Double natureScore = stored.map(PropertyAiEvaluation::getNatureScore)
                 .orElseGet(() -> dataset.map(DobongAiDataset.Entry::parkScore).orElse(null));
-        Double sunlightScore = stored.map(PropertyAiEvaluation::getSunlightScore).orElse(null);
+        Double sunlightScore = stored.map(PropertyAiEvaluation::getSunlightScore)
+                .orElseGet(() -> evaluationScorePolicy.calculateSunlightScore(
+                        property.getDirection(), property.getCurrentFloor(), property.getTotalFloors()));
+        Integer buildingYear = buildingInformation.map(PropertyBuildingInformation::getBuildingYear)
+                .orElseGet(() -> dataset.map(DobongAiDataset.Entry::buildYear).orElse(null));
         Double buildingScore = stored.map(PropertyAiEvaluation::getBuildingConditionScore)
-                .orElseGet(() -> buildingInformation.map(PropertyBuildingInformation::getBuildingYear)
-                        .or(() -> dataset.map(DobongAiDataset.Entry::buildYear))
-                        .map(PropertyInsightService::calculateBuildingConditionScore).orElse(null));
+                .orElseGet(() -> evaluationScorePolicy.calculateBuildingConditionScore(
+                        buildingYear, property.getRemodelingYear()));
         Double infrastructureScore = stored.map(PropertyAiEvaluation::getInfrastructureScore)
                 .orElseGet(() -> dataset.map(PropertyInsightService::calculateInfrastructureScore).orElse(null));
 
@@ -74,9 +78,10 @@ public class PropertyInsightService {
                 category(CategoryKey.SCHOOL, "학군지", schoolScore, geospatialSource, schoolDescription(dataset)),
                 category(CategoryKey.TRANSPORT, "교통", transportScore, geospatialSource, transportDescription(dataset)),
                 category(CategoryKey.NATURE, "자연", natureScore, geospatialSource, natureDescription(dataset)),
-                category(CategoryKey.SUNLIGHT, "일조량", sunlightScore, ScoreSource.PROPERTY_RULE, "매물 방향 정보가 수집되면 층수와 함께 평가에 반영됩니다."),
+                category(CategoryKey.SUNLIGHT, "일조량", sunlightScore, ScoreSource.PROPERTY_RULE,
+                        sunlightDescription(property)),
                 category(CategoryKey.BUILDING_CONDITION, "건물 상태", buildingScore, buildingSource,
-                        buildingDescription(buildingInformation, dataset)),
+                        buildingDescription(buildingYear, property.getRemodelingYear())),
                 category(CategoryKey.INFRASTRUCTURE, "인프라", infrastructureScore, geospatialSource, infrastructureDescription(dataset))
         );
 
@@ -203,17 +208,6 @@ public class PropertyInsightService {
     }
 
     /**
-     * Calculates a building-condition score from its construction year.
-     *
-     * @param buildYear construction year
-     * @return bounded building-condition score
-     */
-    static double calculateBuildingConditionScore(int buildYear) {
-        int age = Math.max(0, LocalDateTime.now().getYear() - buildYear);
-        return Math.max(20.0, Math.min(100.0, 100.0 - age * 2.0));
-    }
-
-    /**
      * Rounds a number to one decimal place.
      *
      * @param value number to round
@@ -268,12 +262,23 @@ public class PropertyInsightService {
      * @param dataset matching dataset entry
      * @return building-condition description
      */
-    private String buildingDescription(Optional<PropertyBuildingInformation> buildingInformation,
-                                       Optional<DobongAiDataset.Entry> dataset) {
-        return buildingInformation.map(PropertyBuildingInformation::getBuildingYear)
-                .or(() -> dataset.flatMap(entry -> Optional.ofNullable(entry.buildYear())))
-                .map(year -> year + "년 준공 정보를 기준으로 산정한 점수입니다.")
-                .orElse("준공연도와 건물 시설 정보가 수집되면 평가에 반영됩니다.");
+    private String sunlightDescription(Property property) {
+        if (property.getDirection() == null
+                || property.getDirection() == com.homes.backend.domain.property.entity.PropertyDirection.UNKNOWN) {
+            return "주실 방향 정보가 입력되면 현재 층수와 함께 평가에 반영됩니다.";
+        }
+        return property.getDirection().name() + " 방향과 " + property.getCurrentFloor()
+                + "/" + property.getTotalFloors() + "층 정보를 기준으로 산정한 점수입니다.";
+    }
+
+    private String buildingDescription(Integer buildingYear, Integer remodelingYear) {
+        if (buildingYear == null) {
+            return "준공연도가 수집되면 건물 상태 평가에 반영됩니다.";
+        }
+        if (remodelingYear != null) {
+            return buildingYear + "년 준공 및 " + remodelingYear + "년 리모델링 정보를 기준으로 산정한 점수입니다.";
+        }
+        return buildingYear + "년 준공 정보를 기준으로 산정한 점수입니다.";
     }
 
     /**

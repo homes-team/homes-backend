@@ -63,6 +63,15 @@ public class Property extends BaseEntity {
     @Column(nullable = false)
     private Integer currentFloor;
 
+    @Enumerated(EnumType.STRING)
+    private PropertyDirection direction;
+
+    private Integer remodelingYear;
+
+    public PropertyDirection getDirection() {
+        return direction == null ? PropertyDirection.UNKNOWN : direction;
+    }
+
     @Column(nullable = false)
     private Double area;
 
@@ -113,7 +122,8 @@ public class Property extends BaseEntity {
     public Property(User user, String title, String description, String address, String detailAddress,
                     TradeType tradeType, PropertyType propertyType, Long deposit,
                     Long monthlyRent, Long maintenanceFee, Integer totalFloors,
-                    Integer currentFloor, Double area, Integer aiScore,
+                    Integer currentFloor, PropertyDirection direction, Integer remodelingYear,
+                    Double area, Integer aiScore,
                     Point coordinate, Double desiredBrokerageFee,
                     List<PropertyOption> options, String nearestStation, Integer walkingTime, PropertyStatus status) {
         this.user = user;
@@ -128,6 +138,8 @@ public class Property extends BaseEntity {
         this.maintenanceFee = maintenanceFee;
         this.totalFloors = totalFloors;
         this.currentFloor = currentFloor;
+        this.direction = direction == null ? PropertyDirection.UNKNOWN : direction;
+        this.remodelingYear = remodelingYear;
         this.area = area;
         this.aiScore = aiScore;
         this.coordinate = coordinate;
@@ -182,7 +194,8 @@ public class Property extends BaseEntity {
     public void update(String title, String description, String address, String detailAddress,
                        TradeType tradeType, PropertyType propertyType, Long deposit,
                        Long monthlyRent, Long maintenanceFee, Integer totalFloors,
-                       Integer currentFloor, Double area, Point coordinate,
+                       Integer currentFloor, PropertyDirection direction, Integer remodelingYear,
+                       Double area, Point coordinate,
                        Double desiredBrokerageFee, List<PropertyOption> options,
                        String nearestStation, Integer walkingTime
     ) {
@@ -197,6 +210,8 @@ public class Property extends BaseEntity {
         this.maintenanceFee = maintenanceFee;
         this.totalFloors = totalFloors;
         this.currentFloor = currentFloor;
+        this.direction = direction == null ? PropertyDirection.UNKNOWN : direction;
+        this.remodelingYear = remodelingYear;
         this.area = area;
         this.coordinate = coordinate;
         this.desiredBrokerageFee = desiredBrokerageFee;

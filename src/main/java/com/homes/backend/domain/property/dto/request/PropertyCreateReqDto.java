@@ -1,6 +1,7 @@
 package com.homes.backend.domain.property.dto.request;
 
 import com.homes.backend.domain.property.entity.PropertyOption;
+import com.homes.backend.domain.property.entity.PropertyDirection;
 import com.homes.backend.domain.property.entity.PropertyType;
 import com.homes.backend.domain.property.entity.TradeType;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -35,6 +36,12 @@ public record PropertyCreateReqDto(
 
         @Schema(description = "건물 전체 층수", example = "5")
         Integer totalFloors,
+
+        @Schema(description = "주실 방향. 미입력 시 UNKNOWN", example = "SOUTH")
+        PropertyDirection direction,
+
+        @Schema(description = "최근 리모델링 연도. 리모델링 정보가 없으면 null", example = "2022", nullable = true)
+        Integer remodelingYear,
 
         @Schema(description = "면적 (m²)", example = "19.95")
         Double area,

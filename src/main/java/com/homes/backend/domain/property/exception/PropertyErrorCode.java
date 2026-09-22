@@ -20,6 +20,7 @@ public enum PropertyErrorCode implements BaseErrorCode {
     BUILDING_PROVIDER_UNAVAILABLE("BUILDING502_1", "공공 건물정보 제공기관에 일시적으로 연결할 수 없습니다.", HttpStatus.BAD_GATEWAY),
     INVALID_ISOCHRONE_PARAMETER("ISOCHRONE400", "이동수단은 walk 또는 drive, 이동시간은 5, 10, 15, 20, 30분 중 하나여야 합니다.", HttpStatus.BAD_REQUEST),
     ISOCHRONE_COORDINATE_UNAVAILABLE("ISOCHRONE422", "해당 매물 위치에서 이동 가능 영역을 계산할 수 없습니다.", HttpStatus.UNPROCESSABLE_ENTITY),
+    INVALID_REMODELING_YEAR("PROP400_3", "리모델링 연도는 건축연도 이후이며 현재 연도 이하여야 합니다.", HttpStatus.BAD_REQUEST),
     REGISTRY_RISK_NOT_FOUND("PROP404_2", "아직 등기부등본 스캔이 완료되지 않았습니다.", HttpStatus.NOT_FOUND);
 
     private final String code;

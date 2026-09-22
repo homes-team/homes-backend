@@ -4,6 +4,7 @@ import com.homes.backend.domain.property.dto.request.PropertyCreateReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyMapSearchReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyUpdateReqDto;
 import com.homes.backend.domain.property.building.event.BuildingInformationCollectionRequestedEvent;
+import com.homes.backend.domain.property.building.repository.PropertyBuildingInformationRepository;
 import com.homes.backend.domain.bid.entity.Bid;
 import com.homes.backend.domain.bid.entity.BidStatus;
 import com.homes.backend.domain.bid.repository.BidRepository;
@@ -13,6 +14,8 @@ import com.homes.backend.domain.property.dto.response.PropertyRealtorInfoResDto;
 import com.homes.backend.domain.property.entity.*;
 import com.homes.backend.domain.property.event.PropertySavedEvent;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
+import com.homes.backend.domain.property.insight.repository.PropertyAiEvaluationRepository;
+import com.homes.backend.domain.property.insight.service.PropertyEvaluationScorePolicy;
 import com.homes.backend.domain.property.repository.*;
 import com.homes.backend.domain.realtor.entity.Agent;
 import com.homes.backend.domain.user.entity.User;
@@ -41,6 +44,9 @@ public class PropertyService {
     private final S3PresignedUrlService s3PresignedUrlService;
     private final BidRepository bidRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final PropertyBuildingInformationRepository buildingInformationRepository;
+    private final PropertyAiEvaluationRepository evaluationRepository;
+    private final PropertyEvaluationScorePolicy evaluationScorePolicy;
 
     /**
      * GPS 표준인 4326(WGS84) 기반으로 Point를 만들어주는 팩토리
@@ -59,6 +65,7 @@ public class PropertyService {
         if (!user.isIdentityVerified()) {
             throw new CustomException(UserErrorCode.IDENTITY_VERIFICATION_NOT_COMPLETED);
         }
+        validateRemodelingYear(reqDto.remodelingYear(), null);
 
         /*
          *  Double 위도/경도를 공간 데이터(Point)로 변환
@@ -104,6 +111,8 @@ public class PropertyService {
                 .maintenanceFee(reqDto.maintenanceFee())
                 .totalFloors(reqDto.totalFloors())
                 .currentFloor(reqDto.currentFloor())
+                .direction(reqDto.direction())
+                .remodelingYear(reqDto.remodelingYear())
                 .area(reqDto.area())
                 .coordinate(point)
                 .desiredBrokerageFee(reqDto.desiredBrokerageFee())
@@ -244,6 +253,16 @@ public class PropertyService {
 
         validateOwnership(property, userId);
         boolean addressChanged = !Objects.equals(property.getAddress(), reqDto.address());
+        PropertyDirection updatedDirection = reqDto.direction() == null
+                ? PropertyDirection.UNKNOWN : reqDto.direction();
+        boolean evaluationInputChanged = property.getDirection() != updatedDirection
+                || !Objects.equals(property.getRemodelingYear(), reqDto.remodelingYear())
+                || !Objects.equals(property.getCurrentFloor(), reqDto.currentFloor())
+                || !Objects.equals(property.getTotalFloors(), reqDto.totalFloors());
+        Integer buildingYear = buildingInformationRepository.findById(propertyId)
+                .map(information -> information.getBuildingYear())
+                .orElse(null);
+        validateRemodelingYear(reqDto.remodelingYear(), buildingYear);
 
         /*
          * 수정된 데이터에 맞춰 위경도 Point 변환 및 자동 부제목 재조립
@@ -275,7 +294,7 @@ public class PropertyService {
                 updatedTitle, reqDto.description(), reqDto.address(), reqDto.detailAddress(),
                 reqDto.tradeType(), reqDto.propertyType(), reqDto.deposit(),
                 reqDto.monthlyRent(), reqDto.maintenanceFee(), reqDto.totalFloors(),
-                reqDto.currentFloor(), reqDto.area(), point,
+                reqDto.currentFloor(), updatedDirection, reqDto.remodelingYear(), reqDto.area(), point,
                 reqDto.desiredBrokerageFee(),
                 reqDto.options(),
                 calcNearestStation,
@@ -305,8 +324,17 @@ public class PropertyService {
         }
 
         eventPublisher.publishEvent(new PropertySavedEvent(propertyId));
+        if (evaluationInputChanged) {
+            evaluationRepository.deleteById(propertyId);
+        }
         if (addressChanged) {
             eventPublisher.publishEvent(new BuildingInformationCollectionRequestedEvent(propertyId));
+        }
+    }
+
+    private void validateRemodelingYear(Integer remodelingYear, Integer buildingYear) {
+        if (!evaluationScorePolicy.isValidRemodelingYear(remodelingYear, buildingYear)) {
+            throw new CustomException(PropertyErrorCode.INVALID_REMODELING_YEAR);
         }
     }
 
