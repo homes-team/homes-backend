@@ -14,6 +14,6 @@ public class PublicDataApiProperties {
     private String buildingRegisterUrl = "https://apis.data.go.kr/1613000/BldRgstHubService";
     private String apartmentListUrl = "https://apis.data.go.kr/1613000/AptListService4";
     private String apartmentBasisUrl = "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5";
-    private int connectTimeoutMillis = 3000;
-    private int readTimeoutMillis = 5000;
+    private int connectTimeoutMillis = 5000;
+    private int readTimeoutMillis = 20000;
 }
