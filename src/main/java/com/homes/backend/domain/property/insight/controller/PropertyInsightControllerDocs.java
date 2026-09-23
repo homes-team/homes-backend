@@ -17,7 +17,12 @@ public interface PropertyInsightControllerDocs {
      * @param propertyId 매물 ID
      * @return AI 평가 응답
      */
-    @Operation(summary = "AI 매물 다면평가 조회", description = "100점 원본 점수와 5점 표시 점수, 6개 평가 항목 및 구조화된 리포트를 반환합니다.")
+    @Operation(
+            summary = "AI 매물 다면평가 조회",
+            description = "100점 원본 점수와 5점 표시 점수, 6개 평가 항목 및 구조화된 리포트를 반환합니다. "
+                    + "평가 입력이 4개 이상이면 OpenAI 리포트를 생성·캐싱하며, API 미설정 또는 호출 실패 시 "
+                    + "RULE_BASED_REPORT_V1 리포트로 대체합니다."
+    )
     ApiResponse<AiEvaluationRespDto> getAiEvaluation(
             @Parameter(description = "매물 ID") @PathVariable Long propertyId
     );

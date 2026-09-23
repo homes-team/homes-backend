@@ -24,6 +24,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,6 +33,7 @@ class PropertyInsightServiceTest {
     @Mock PropertyAiEvaluationRepository evaluationRepository;
     @Mock DobongAiDataset dobongAiDataset;
     @Mock PropertyBuildingInformationRepository buildingInformationRepository;
+    @Mock AiEvaluationReportService evaluationReportService;
 
     private PropertyInsightService service;
     private Property property;
@@ -42,7 +44,7 @@ class PropertyInsightServiceTest {
     @BeforeEach
     void setUp() {
         service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset,
-                buildingInformationRepository, new PropertyEvaluationScorePolicy());
+                buildingInformationRepository, new PropertyEvaluationScorePolicy(), evaluationReportService);
         Point point = new GeometryFactory().createPoint(new Coordinate(127.0471, 37.6688));
         point.setSRID(4326);
         property = Property.builder()
@@ -84,6 +86,13 @@ class PropertyInsightServiceTest {
         when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
         when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
         when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
+        when(evaluationReportService.resolve(
+                eq(property), anyList(), anyString(), any(), any(), any()))
+                .thenAnswer(invocation -> new AiEvaluationReportService.Resolution(
+                        invocation.getArgument(4),
+                        AiEvaluationReportService.RULE_BASED_MODEL_VERSION,
+                        invocation.getArgument(5)
+                ));
 
         AiEvaluationRespDto response = service.getAiEvaluation(1L);
 

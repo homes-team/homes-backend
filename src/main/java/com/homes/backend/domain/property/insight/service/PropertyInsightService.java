@@ -36,6 +36,7 @@ public class PropertyInsightService {
     private final DobongAiDataset dobongAiDataset;
     private final PropertyBuildingInformationRepository buildingInformationRepository;
     private final PropertyEvaluationScorePolicy evaluationScorePolicy;
+    private final AiEvaluationReportService evaluationReportService;
 
     /**
      * Builds the six-category AI evaluation for a property from stored or bundled data.
@@ -93,19 +94,22 @@ public class PropertyInsightService {
         double completeness = Math.round(evaluatedCount / 6.0 * 1000.0) / 10.0;
 
         String notice = evaluatedCount < 6 ? "일부 평가 항목은 데이터 수집 후 반영될 예정입니다." : null;
-        Report report = buildReport(categories, notice);
-        LocalDateTime generatedAt = stored.map(PropertyAiEvaluation::getGeneratedAt)
+        Report ruleBasedReport = buildReport(categories, notice);
+        LocalDateTime scoreGeneratedAt = stored.map(PropertyAiEvaluation::getGeneratedAt)
                 .orElseGet(() -> dataset.isPresent() ? dobongAiDataset.loadedAt() : LocalDateTime.now());
+        String scoreVersion = stored.map(PropertyAiEvaluation::getScoreVersion)
+                .orElseGet(() -> dataset.isPresent() ? "DOBONG_GEOSPATIAL_V1" : "PENDING");
+        AiEvaluationReportService.Resolution reportResolution = evaluationReportService.resolve(
+                property, categories, scoreVersion, notice, ruleBasedReport, scoreGeneratedAt);
 
         return new AiEvaluationRespDto(
                 propertyId,
                 new OverallScore(rawOverall, toDisplayScore(rawOverall), evaluatedCount, 6, completeness),
                 categories,
-                report,
-                stored.map(PropertyAiEvaluation::getScoreVersion)
-                        .orElseGet(() -> dataset.isPresent() ? "DOBONG_GEOSPATIAL_V1" : "PENDING"),
-                "RULE_BASED_REPORT_V1",
-                generatedAt
+                reportResolution.report(),
+                scoreVersion,
+                reportResolution.modelVersion(),
+                reportResolution.generatedAt()
         );
     }
 
