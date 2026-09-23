@@ -1,6 +1,7 @@
 package com.homes.backend.domain.property.insight.service;
 
 import com.homes.backend.domain.property.entity.Property;
+import com.homes.backend.domain.property.entity.PropertyDirection;
 import com.homes.backend.domain.property.entity.PropertyStatus;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
 import com.homes.backend.domain.property.insight.data.DobongAiDataset;
@@ -40,7 +41,8 @@ class PropertyInsightServiceTest {
      */
     @BeforeEach
     void setUp() {
-        service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset, buildingInformationRepository);
+        service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset,
+                buildingInformationRepository, new PropertyEvaluationScorePolicy());
         Point point = new GeometryFactory().createPoint(new Coordinate(127.0471, 37.6688));
         point.setSRID(4326);
         property = Property.builder()
@@ -53,6 +55,8 @@ class PropertyInsightServiceTest {
                 .maintenanceFee(10L)
                 .totalFloors(5)
                 .currentFloor(3)
+                .direction(PropertyDirection.SOUTH)
+                .remodelingYear(2022)
                 .area(23.0)
                 .aiScore(85)
                 .coordinate(point)
@@ -72,10 +76,10 @@ class PropertyInsightServiceTest {
     }
 
     /**
-     * Verifies that missing evaluation sources produce six pending categories.
+     * Verifies that property fields can provide a rule score before geospatial data is loaded.
      */
     @Test
-    void returnsSixPendingCategoriesWhenGeospatialScoresAreNotLoaded() {
+    void calculatesPropertyRuleScoreWhenGeospatialScoresAreNotLoaded() {
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
         when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
         when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
@@ -84,10 +88,12 @@ class PropertyInsightServiceTest {
         AiEvaluationRespDto response = service.getAiEvaluation(1L);
 
         assertThat(response.categories()).hasSize(6);
-        assertThat(response.categories()).allMatch(category -> category.status() == AiEvaluationRespDto.ScoreStatus.PENDING_DATA);
+        assertThat(response.categories().stream()
+                .filter(category -> category.key() == AiEvaluationRespDto.CategoryKey.SUNLIGHT)
+                .findFirst().orElseThrow().status()).isEqualTo(AiEvaluationRespDto.ScoreStatus.AVAILABLE);
         assertThat(response.overall().rawScore()).isNull();
         assertThat(response.overall().displayScore()).isNull();
-        assertThat(response.overall().completeness()).isZero();
+        assertThat(response.overall().completeness()).isEqualTo(16.7);
     }
 
     /**

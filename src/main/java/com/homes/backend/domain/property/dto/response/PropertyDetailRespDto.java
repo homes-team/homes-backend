@@ -4,6 +4,9 @@ import com.homes.backend.domain.property.entity.*;
 
 import java.util.List;
 
+/**
+ * Represents the full property details returned to an authorized viewer.
+ */
 public record PropertyDetailRespDto(
         Long propertyId,
         List<String> imageUrls,
@@ -18,6 +21,8 @@ public record PropertyDetailRespDto(
         Long maintenanceFee,
         Integer totalFloors,
         Integer currentFloor,
+        PropertyDirection direction,
+        Integer remodelingYear,
         Double area,
         Integer aiScore,
         Double desiredBrokerageFee,
@@ -30,6 +35,12 @@ public record PropertyDetailRespDto(
         boolean isSuspicious,
         PropertyStatus status
 ) {
+    /**
+     * Maps a property entity to its detailed response representation.
+     *
+     * @param property property to expose
+     * @return detailed property response
+     */
     public static PropertyDetailRespDto from(Property property) {
         List<String> urls = property.getImages().stream()
                 .map(PropertyImage::getImageUrl)
@@ -49,6 +60,8 @@ public record PropertyDetailRespDto(
                 property.getMaintenanceFee(),
                 property.getTotalFloors(),
                 property.getCurrentFloor(),
+                property.getDirection(),
+                property.getRemodelingYear(),
                 property.getArea(),
                 property.getAiScore(),
                 property.getDesiredBrokerageFee(),
@@ -72,6 +85,8 @@ public record PropertyDetailRespDto(
                 property.getId(),
                 null,
                 property.getTitle(),
+                null,
+                null,
                 null,
                 null,
                 null,
