@@ -87,6 +87,7 @@ public class NotificationService {
         push(event.userId(), event.notification());
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public SseEmitter connect(Long userId) {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MILLIS);
         sseEmitterRepository.save(userId, emitter);

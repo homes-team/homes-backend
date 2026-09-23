@@ -65,7 +65,7 @@ public record PropertyDetailRespDto(
                 property.getArea(),
                 property.getAiScore(),
                 property.getDesiredBrokerageFee(),
-                property.getOptions(),
+                List.copyOf(property.getOptions()),
                 property.getNearestStation(),
                 property.getWalkingTime(),
                 property.getCoordinate().getY(), // 위도(Latitude)
