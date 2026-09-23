@@ -71,6 +71,9 @@ public class PropertyEvaluationScorePolicy {
         return buildingYear == null || remodelingYear >= buildingYear;
     }
 
+    /**
+     * Calculates the sunlight adjustment from a property's relative floor height.
+     */
     private double calculateFloorAdjustment(Integer currentFloor, Integer totalFloors) {
         if (currentFloor == null || totalFloors == null || currentFloor <= 0 || totalFloors <= 0) {
             return 0.0;
@@ -81,15 +84,24 @@ public class PropertyEvaluationScorePolicy {
         return currentFloor <= 2 ? -5.0 : 0.0;
     }
 
+    /**
+     * Converts a construction or remodeling year to the bounded condition scale.
+     */
     private double scoreYear(int year) {
         int age = Math.max(0, Year.now().getValue() - year);
         return clamp(100.0 - age * 2.0);
     }
 
+    /**
+     * Restricts a rule score to the policy's 20-to-100 range.
+     */
     private double clamp(double score) {
         return Math.max(20.0, Math.min(100.0, score));
     }
 
+    /**
+     * Rounds a score to one decimal place.
+     */
     private double round1(double value) {
         return Math.round(value * 10.0) / 10.0;
     }

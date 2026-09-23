@@ -8,6 +8,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 
+/**
+ * Carries replacement values for an existing property listing.
+ */
 @Schema(description = "매물 수정 요청 DTO")
 public record PropertyUpdateReqDto (
         @Schema(description = "거래 종류", example = "JEONSE") TradeType tradeType,

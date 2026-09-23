@@ -257,10 +257,10 @@ public class PropertyInsightService {
     }
 
     /**
-     * Describes the construction-year basis for the building score.
+     * Describes the direction and floor inputs used for the sunlight score.
      *
-     * @param dataset matching dataset entry
-     * @return building-condition description
+     * @param property property whose sunlight inputs were evaluated
+     * @return sunlight-category description
      */
     private String sunlightDescription(Property property) {
         if (property.getDirection() == null
@@ -271,6 +271,13 @@ public class PropertyInsightService {
                 + "/" + property.getTotalFloors() + "층 정보를 기준으로 산정한 점수입니다.";
     }
 
+    /**
+     * Describes the construction and optional remodeling years used for the building score.
+     *
+     * @param buildingYear construction year, or {@code null} when unavailable
+     * @param remodelingYear latest remodeling year, or {@code null} when unavailable
+     * @return building-condition description
+     */
     private String buildingDescription(Integer buildingYear, Integer remodelingYear) {
         if (buildingYear == null) {
             return "준공연도가 수집되면 건물 상태 평가에 반영됩니다.";

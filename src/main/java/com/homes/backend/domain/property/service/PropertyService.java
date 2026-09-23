@@ -332,6 +332,12 @@ public class PropertyService {
         }
     }
 
+    /**
+     * Validates a remodeling year against the accepted range and known construction year.
+     *
+     * @param remodelingYear proposed remodeling year
+     * @param buildingYear known construction year, or {@code null} when unavailable
+     */
     private void validateRemodelingYear(Integer remodelingYear, Integer buildingYear) {
         if (!evaluationScorePolicy.isValidRemodelingYear(remodelingYear, buildingYear)) {
             throw new CustomException(PropertyErrorCode.INVALID_REMODELING_YEAR);

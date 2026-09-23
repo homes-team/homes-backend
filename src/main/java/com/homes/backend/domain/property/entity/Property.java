@@ -68,6 +68,11 @@ public class Property extends BaseEntity {
 
     private Integer remodelingYear;
 
+    /**
+     * Returns the stored main-room direction, treating legacy null values as unknown.
+     *
+     * @return the normalized property direction
+     */
     public PropertyDirection getDirection() {
         return direction == null ? PropertyDirection.UNKNOWN : direction;
     }
@@ -118,6 +123,9 @@ public class Property extends BaseEntity {
     @Column(name = "deal_completed_at")
     private LocalDateTime dealCompletedAt; // 거래완료 처리된 시점 (거래가능 상태면 NULL)
 
+    /**
+     * Creates a property and normalizes an omitted direction to {@link PropertyDirection#UNKNOWN}.
+     */
     @Builder
     public Property(User user, String title, String description, String address, String detailAddress,
                     TradeType tradeType, PropertyType propertyType, Long deposit,

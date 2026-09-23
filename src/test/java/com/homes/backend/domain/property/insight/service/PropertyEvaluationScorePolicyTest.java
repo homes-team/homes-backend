@@ -10,6 +10,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PropertyEvaluationScorePolicyTest {
     private final PropertyEvaluationScorePolicy policy = new PropertyEvaluationScorePolicy();
 
+    /**
+     * Verifies direction baselines and relative-floor adjustments.
+     */
     @Test
     void calculatesSunlightScoreFromDirectionAndFloorRatio() {
         assertThat(policy.calculateSunlightScore(PropertyDirection.SOUTH, 8, 10)).isEqualTo(100.0);
@@ -17,12 +20,18 @@ class PropertyEvaluationScorePolicyTest {
         assertThat(policy.calculateSunlightScore(PropertyDirection.NORTH, 5, 10)).isEqualTo(50.0);
     }
 
+    /**
+     * Verifies that absent direction data leaves the sunlight score pending.
+     */
     @Test
     void keepsSunlightPendingWhenDirectionIsUnknown() {
         assertThat(policy.calculateSunlightScore(PropertyDirection.UNKNOWN, 8, 10)).isNull();
         assertThat(policy.calculateSunlightScore(null, 8, 10)).isNull();
     }
 
+    /**
+     * Verifies the construction and remodeling year weighting policy.
+     */
     @Test
     void combinesBuildingAndRemodelingYears() {
         int currentYear = Year.now().getValue();
@@ -30,6 +39,9 @@ class PropertyEvaluationScorePolicyTest {
         assertThat(policy.calculateBuildingConditionScore(currentYear - 20, currentYear)).isEqualTo(74.0);
     }
 
+    /**
+     * Verifies the lower, construction-year, and current-year boundaries.
+     */
     @Test
     void validatesRemodelingYearBoundaries() {
         int currentYear = Year.now().getValue();

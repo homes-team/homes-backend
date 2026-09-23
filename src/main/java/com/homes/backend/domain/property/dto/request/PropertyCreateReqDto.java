@@ -8,6 +8,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 
+/**
+ * Carries the property attributes supplied when a listing is created.
+ */
 @Schema(description = "매물 등록 요청 DTO")
 public record PropertyCreateReqDto(
         @Schema(description = "거래 종류 (MONTHLY_RENT, JEONSE, SALE)", example = "MONTHLY_RENT")
