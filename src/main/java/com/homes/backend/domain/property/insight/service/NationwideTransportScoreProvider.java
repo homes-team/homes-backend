@@ -64,8 +64,8 @@ public class NationwideTransportScoreProvider {
             evidence.add(new ScoreEvidence(
                         "NEAREST_SUBWAY_DISTANCE",
                         "가장 가까운 지하철역",
-                        String.valueOf(Math.round(nearestSubway.getDistance())),
-                        "m",
+                        nearestSubway.getPoiName() + " · " + Math.round(nearestSubway.getDistance()) + "m",
+                        null,
                         subwayDistanceCriterion(nearestSubway.getDistance()),
                         subwayContribution,
                         "전국 교통 POI"
@@ -75,8 +75,8 @@ public class NationwideTransportScoreProvider {
             evidence.add(new ScoreEvidence(
                     "NEAREST_BUS_DISTANCE",
                     "가장 가까운 버스정류장",
-                    String.valueOf(Math.round(nearestBus.getDistance())),
-                    "m",
+                    nearestBus.getPoiName() + " · " + Math.round(nearestBus.getDistance()) + "m",
+                    null,
                     busDistanceCriterion(nearestBus.getDistance()),
                     busContribution,
                     "전국 교통 POI"

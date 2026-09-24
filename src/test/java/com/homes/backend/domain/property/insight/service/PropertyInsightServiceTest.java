@@ -34,6 +34,7 @@ class PropertyInsightServiceTest {
     @Mock PropertyRepository propertyRepository;
     @Mock PropertyAiEvaluationRepository evaluationRepository;
     @Mock DobongAiDataset dobongAiDataset;
+    @Mock KakaoNearbySchoolProvider nearbySchoolProvider;
     @Mock NationwideTransportScoreProvider nationwideTransportScoreProvider;
     @Mock PropertyBuildingInformationRepository buildingInformationRepository;
     @Mock AiEvaluationReportService evaluationReportService;
@@ -47,7 +48,7 @@ class PropertyInsightServiceTest {
     @BeforeEach
     void setUp() {
         service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset,
-                nationwideTransportScoreProvider, buildingInformationRepository,
+                nearbySchoolProvider, nationwideTransportScoreProvider, buildingInformationRepository,
                 new PropertyEvaluationScorePolicy(), evaluationReportService);
         Point point = new GeometryFactory().createPoint(new Coordinate(127.0471, 37.6688));
         point.setSRID(4326);
@@ -89,6 +90,7 @@ class PropertyInsightServiceTest {
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
         when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
         when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
+        when(nearbySchoolProvider.evaluate(property.getCoordinate())).thenReturn(Optional.empty());
         when(nationwideTransportScoreProvider.evaluate(property.getCoordinate())).thenReturn(Optional.empty());
         when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
         when(evaluationReportService.resolve(
@@ -124,6 +126,7 @@ class PropertyInsightServiceTest {
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
         when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
         when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
+        when(nearbySchoolProvider.evaluate(property.getCoordinate())).thenReturn(Optional.empty());
         when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
         var transportResult = new NationwideTransportScoreProvider.Result(
                 84.0,
@@ -151,7 +154,48 @@ class PropertyInsightServiceTest {
         assertThat(transport.source()).isEqualTo(AiEvaluationRespDto.ScoreSource.GEOSPATIAL_PIPELINE);
         assertThat(transport.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::source)
                 .containsExactly("전국 교통 POI");
-        assertThat(response.scoreVersion()).isEqualTo("NATIONWIDE_EXPLAINABLE_V2");
+        assertThat(response.scoreVersion()).isEqualTo("NATIONWIDE_EXPLAINABLE_V3");
+    }
+
+    @Test
+    void exposesNearestElementaryMiddleAndHighSchoolNames() {
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
+        when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
+        when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
+        when(nationwideTransportScoreProvider.evaluate(property.getCoordinate())).thenReturn(Optional.empty());
+        var schoolResult = new KakaoNearbySchoolProvider.Result(
+                90.0,
+                "가장 가까운 학교는 초 도봉초등학교(약 300m), 중 도봉중학교(약 500m), 고 도봉고등학교(약 700m)입니다.",
+                List.of(
+                        new AiEvaluationRespDto.ScoreEvidence("NEAREST_ELEMENTARY_SCHOOL",
+                                "가장 가까운 초등학교", "도봉초등학교 · 300m", null,
+                                "500m 이하", 33.3, "카카오 로컬 학교 검색"),
+                        new AiEvaluationRespDto.ScoreEvidence("NEAREST_MIDDLE_SCHOOL",
+                                "가장 가까운 중학교", "도봉중학교 · 500m", null,
+                                "500m 이하", 33.3, "카카오 로컬 학교 검색"),
+                        new AiEvaluationRespDto.ScoreEvidence("NEAREST_HIGH_SCHOOL",
+                                "가장 가까운 고등학교", "도봉고등학교 · 700m", null,
+                                "1km 이하", 26.7, "카카오 로컬 학교 검색")
+                ),
+                new AiEvaluationRespDto.ScoreCalculation(
+                        "초·중·고 최근접 학교 거리 점수 평균 = 90.0", "NATIONWIDE_SCHOOL_V1")
+        );
+        when(nearbySchoolProvider.evaluate(property.getCoordinate())).thenReturn(Optional.of(schoolResult));
+        when(evaluationReportService.resolve(eq(property), anyList(), anyString(), any(), any(), any()))
+                .thenAnswer(invocation -> new AiEvaluationReportService.Resolution(
+                        invocation.getArgument(4), AiEvaluationReportService.RULE_BASED_MODEL_VERSION,
+                        LocalDateTime.now()));
+
+        AiEvaluationRespDto response = service.getAiEvaluation(1L);
+
+        AiEvaluationRespDto.CategoryScore school = response.categories().stream()
+                .filter(category -> category.key() == AiEvaluationRespDto.CategoryKey.SCHOOL)
+                .findFirst().orElseThrow();
+        assertThat(school.rawScore()).isEqualTo(90.0);
+        assertThat(school.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::value)
+                .containsExactly("도봉초등학교 · 300m", "도봉중학교 · 500m", "도봉고등학교 · 700m");
+        assertThat(school.description()).contains("도봉초등학교", "도봉중학교", "도봉고등학교");
     }
 
     private void setAddress(Property target, String address) {

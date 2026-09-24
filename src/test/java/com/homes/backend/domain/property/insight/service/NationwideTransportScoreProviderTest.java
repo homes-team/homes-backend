@@ -46,6 +46,8 @@ class NationwideTransportScoreProviderTest {
         assertThat(result.evidence()).extracting(evidence -> evidence.code())
                 .containsExactly("NEAREST_SUBWAY_DISTANCE", "NEAREST_BUS_DISTANCE",
                         "SUBWAY_COUNT_WITHIN_1KM", "BUS_COUNT_WITHIN_500M");
+        assertThat(result.evidence().get(0).value()).isEqualTo("서면역 · 420m");
+        assertThat(result.evidence().get(1).value()).isEqualTo("서면교차로 · 90m");
         assertThat(result.calculation().policyVersion())
                 .isEqualTo(NationwideTransportScoreProvider.POLICY_VERSION);
     }

@@ -34,6 +34,7 @@ public class PropertyInsightService {
     private final PropertyRepository propertyRepository;
     private final PropertyAiEvaluationRepository evaluationRepository;
     private final DobongAiDataset dobongAiDataset;
+    private final KakaoNearbySchoolProvider nearbySchoolProvider;
     private final NationwideTransportScoreProvider nationwideTransportScoreProvider;
     private final PropertyBuildingInformationRepository buildingInformationRepository;
     private final PropertyEvaluationScorePolicy evaluationScorePolicy;
@@ -51,10 +52,11 @@ public class PropertyInsightService {
         Optional<DobongAiDataset.Entry> dataset = stored.isEmpty()
                 ? dobongAiDataset.findByAddress(property.getAddress())
                 : Optional.empty();
-        Optional<NationwideTransportScoreProvider.Result> nationwideTransport =
-                stored.isEmpty() && dataset.isEmpty()
-                        ? nationwideTransportScoreProvider.evaluate(property.getCoordinate())
-                        : Optional.empty();
+        Optional<KakaoNearbySchoolProvider.Result> nearbySchools =
+                nearbySchoolProvider.evaluate(property.getCoordinate());
+        Optional<NationwideTransportScoreProvider.Result> nationwideTransport = dataset.isEmpty()
+                ? nationwideTransportScoreProvider.evaluate(property.getCoordinate())
+                : Optional.empty();
         Optional<PropertyBuildingInformation> buildingInformation = stored.isEmpty()
                 ? buildingInformationRepository.findById(propertyId)
                 : Optional.empty();
@@ -64,7 +66,8 @@ public class PropertyInsightService {
                         property.getDirection(), property.getCurrentFloor(), property.getTotalFloors());
 
         Double schoolScore = stored.map(PropertyAiEvaluation::getSchoolScore)
-                .orElseGet(() -> dataset.map(DobongAiDataset.Entry::educationScore).orElse(null));
+                .orElseGet(() -> dataset.map(DobongAiDataset.Entry::educationScore)
+                        .orElseGet(() -> nearbySchools.map(KakaoNearbySchoolProvider.Result::score).orElse(null)));
         Double transportScore = stored.map(PropertyAiEvaluation::getTransportScore)
                 .orElseGet(() -> dataset.map(DobongAiDataset.Entry::transportationScore)
                         .orElseGet(() -> nationwideTransport
@@ -91,8 +94,8 @@ public class PropertyInsightService {
 
         List<CategoryScore> categories = List.of(
                 category(CategoryKey.SCHOOL, "학군지", schoolScore, legacyOrStoredSource,
-                        schoolDescription(dataset), schoolEvidence(dataset),
-                        precomputedCalculation(schoolScore, dataset, stored)),
+                        schoolDescription(dataset, nearbySchools), schoolEvidence(dataset, nearbySchools),
+                        schoolCalculation(schoolScore, dataset, stored, nearbySchools)),
                 category(CategoryKey.TRANSPORT, "교통", transportScore, transportSource,
                         transportDescription(dataset, nationwideTransport),
                         transportEvidence(dataset, nationwideTransport),
@@ -126,7 +129,8 @@ public class PropertyInsightService {
         String scoreVersion = stored.map(PropertyAiEvaluation::getScoreVersion)
                 .orElseGet(() -> dataset.isPresent()
                         ? "DOBONG_GEOSPATIAL_V1"
-                        : nationwideTransport.isPresent() ? "NATIONWIDE_EXPLAINABLE_V2" : "PROPERTY_RULE_V2");
+                        : nearbySchools.isPresent() || nationwideTransport.isPresent()
+                                ? "NATIONWIDE_EXPLAINABLE_V3" : "PROPERTY_RULE_V2");
         AiEvaluationReportService.Resolution reportResolution = evaluationReportService.resolve(
                 property, categories, scoreVersion, notice, ruleBasedReport, scoreGeneratedAt);
 
@@ -265,12 +269,16 @@ public class PropertyInsightService {
      * @param dataset matching dataset entry
      * @return school-category description
      */
-    private String schoolDescription(Optional<DobongAiDataset.Entry> dataset) {
-        return dataset.map(entry -> "가장 가까운 학교까지 약 " + Math.round(entry.nearestSchoolDistanceMeters())
+    private String schoolDescription(
+            Optional<DobongAiDataset.Entry> dataset,
+            Optional<KakaoNearbySchoolProvider.Result> nearbySchools
+    ) {
+        return nearbySchools.map(KakaoNearbySchoolProvider.Result::description)
+                .orElseGet(() -> dataset.map(entry -> "가장 가까운 학교까지 약 " + Math.round(entry.nearestSchoolDistanceMeters())
                 + "m이며, 1km 내 초·중·고교가 "
                 + (entry.elementaryCountWithin1km() + entry.middleCountWithin1km() + entry.highCountWithin1km())
                 + "곳 있습니다.")
-                .orElse("학교 접근성과 주변 교육 인프라를 기준으로 산정합니다.");
+                .orElse("학교 접근성과 주변 교육 인프라를 기준으로 산정합니다."));
     }
 
     /**
@@ -347,7 +355,11 @@ public class PropertyInsightService {
                 .orElse("병원, 마트, 문화시설 등 생활 편의시설 접근성을 기준으로 산정합니다.");
     }
 
-    private List<ScoreEvidence> schoolEvidence(Optional<DobongAiDataset.Entry> dataset) {
+    private List<ScoreEvidence> schoolEvidence(
+            Optional<DobongAiDataset.Entry> dataset,
+            Optional<KakaoNearbySchoolProvider.Result> nearbySchools
+    ) {
+        if (nearbySchools.isPresent()) return nearbySchools.get().evidence();
         return dataset.map(entry -> List.of(
                 evidence("NEAREST_SCHOOL_DISTANCE", "가장 가까운 학교", entry.nearestSchoolDistanceMeters(),
                         "m", "학교 접근 거리 반영", null, "도봉구 지리 데이터셋"),
@@ -363,12 +375,25 @@ public class PropertyInsightService {
             Optional<NationwideTransportScoreProvider.Result> nationwideTransport
     ) {
         return dataset.map(entry -> List.of(
-                evidence("NEAREST_SUBWAY_DISTANCE", "가장 가까운 지하철역", entry.subwayDistanceMeters(),
-                        "m", "지하철 접근 거리 반영", null, "도봉구 지리 데이터셋"),
-                evidence("NEAREST_BUS_DISTANCE", "가장 가까운 버스정류장", entry.busDistanceMeters(),
-                        "m", "버스 접근 거리 반영", null, "도봉구 지리 데이터셋")
+                new ScoreEvidence("NEAREST_SUBWAY_DISTANCE", "가장 가까운 지하철역",
+                        entry.nearestSubway() + " · " + Math.round(entry.subwayDistanceMeters()) + "m",
+                        null, "지하철 접근 거리 반영", null, "도봉구 지리 데이터셋"),
+                new ScoreEvidence("NEAREST_BUS_DISTANCE", "가장 가까운 버스정류장",
+                        entry.nearestBus() + " · " + Math.round(entry.busDistanceMeters()) + "m",
+                        null, "버스 접근 거리 반영", null, "도봉구 지리 데이터셋")
         )).orElseGet(() -> nationwideTransport
                 .map(NationwideTransportScoreProvider.Result::evidence).orElse(List.of()));
+    }
+
+    private ScoreCalculation schoolCalculation(
+            Double score,
+            Optional<DobongAiDataset.Entry> dataset,
+            Optional<PropertyAiEvaluation> stored,
+            Optional<KakaoNearbySchoolProvider.Result> nearbySchools
+    ) {
+        if (score == null) return null;
+        if (stored.isPresent() || dataset.isPresent()) return precomputedCalculation(score, dataset, stored);
+        return nearbySchools.map(KakaoNearbySchoolProvider.Result::calculation).orElse(null);
     }
 
     private List<ScoreEvidence> natureEvidence(Optional<DobongAiDataset.Entry> dataset) {
