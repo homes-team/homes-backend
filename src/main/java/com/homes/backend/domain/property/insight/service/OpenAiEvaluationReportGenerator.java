@@ -19,13 +19,15 @@ import java.util.Optional;
 @Component
 public class OpenAiEvaluationReportGenerator implements AiEvaluationReportGenerator {
     static final String MODEL = "gpt-5-nano";
-    static final String MODEL_VERSION = "OPENAI_GPT_5_NANO_V1";
+    static final String MODEL_VERSION = "OPENAI_GPT_5_NANO_EVIDENCE_V2";
 
     private static final String SYSTEM_PROMPT = """
             당신은 부동산 매물의 생활 여건을 설명하는 분석가입니다.
-            제공된 점수와 설명만 사용하고 확인되지 않은 시설, 거리, 가격 또는 사실을 만들어내지 마세요.
+            제공된 점수, calculation, evidence만 사용하고 확인되지 않은 시설, 거리, 가격 또는 사실을 만들어내지 마세요.
             점수 자체를 변경하지 말고 소비자가 이해하기 쉬운 한국어로 요약하세요.
-            강점과 약점은 각각 최대 3개이며, 근거가 없으면 빈 배열로 반환하세요.
+            강점과 약점에는 반드시 해당 항목의 실제 거리, 시설 수, 방향, 층수 또는 연도 중 하나를 근거로 포함하세요.
+            데이터 수집률이나 수집 진행 상황보다 왜 해당 점수가 산정되었는지를 우선 설명하세요.
+            강점과 약점은 각각 최대 3개이며, evidence가 없으면 해당 항목을 언급하지 마세요.
             """;
 
     private final OpenAiApiProperties properties;

@@ -27,7 +27,42 @@ public record AiEvaluationRespDto(
             Double displayScore,
             ScoreStatus status,
             ScoreSource source,
-            String description
+            String description,
+            List<ScoreEvidence> evidence,
+            ScoreCalculation calculation
+    ) {
+        public CategoryScore(
+                CategoryKey key,
+                String label,
+                Double rawScore,
+                Double displayScore,
+                ScoreStatus status,
+                ScoreSource source,
+                String description
+        ) {
+            this(key, label, rawScore, displayScore, status, source, description, List.of(), null);
+        }
+    }
+
+    /**
+     * One observable fact used to calculate or explain a category score.
+     */
+    public record ScoreEvidence(
+            String code,
+            String label,
+            String value,
+            String unit,
+            String criterion,
+            Double contribution,
+            String source
+    ) {}
+
+    /**
+     * Human-readable score formula and the deterministic policy version that produced it.
+     */
+    public record ScoreCalculation(
+            String formula,
+            String policyVersion
     ) {}
 
     public record Report(

@@ -20,6 +20,8 @@ import org.locationtech.jts.geom.Point;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +34,7 @@ class PropertyInsightServiceTest {
     @Mock PropertyRepository propertyRepository;
     @Mock PropertyAiEvaluationRepository evaluationRepository;
     @Mock DobongAiDataset dobongAiDataset;
+    @Mock NationwideTransportScoreProvider nationwideTransportScoreProvider;
     @Mock PropertyBuildingInformationRepository buildingInformationRepository;
     @Mock AiEvaluationReportService evaluationReportService;
 
@@ -44,7 +47,8 @@ class PropertyInsightServiceTest {
     @BeforeEach
     void setUp() {
         service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset,
-                buildingInformationRepository, new PropertyEvaluationScorePolicy(), evaluationReportService);
+                nationwideTransportScoreProvider, buildingInformationRepository,
+                new PropertyEvaluationScorePolicy(), evaluationReportService);
         Point point = new GeometryFactory().createPoint(new Coordinate(127.0471, 37.6688));
         point.setSRID(4326);
         property = Property.builder()
@@ -85,6 +89,7 @@ class PropertyInsightServiceTest {
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
         when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
         when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
+        when(nationwideTransportScoreProvider.evaluate(property.getCoordinate())).thenReturn(Optional.empty());
         when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
         when(evaluationReportService.resolve(
                 eq(property), anyList(), anyString(), any(), any(), any()))
@@ -99,10 +104,64 @@ class PropertyInsightServiceTest {
         assertThat(response.categories()).hasSize(6);
         assertThat(response.categories().stream()
                 .filter(category -> category.key() == AiEvaluationRespDto.CategoryKey.SUNLIGHT)
-                .findFirst().orElseThrow().status()).isEqualTo(AiEvaluationRespDto.ScoreStatus.AVAILABLE);
+                .findFirst().orElseThrow())
+                .satisfies(category -> {
+                    assertThat(category.status()).isEqualTo(AiEvaluationRespDto.ScoreStatus.AVAILABLE);
+                    assertThat(category.evidence()).hasSize(2);
+                    assertThat(category.calculation().policyVersion()).isEqualTo("PROPERTY_RULE_V2");
+                });
         assertThat(response.overall().rawScore()).isNull();
         assertThat(response.overall().displayScore()).isNull();
         assertThat(response.overall().completeness()).isEqualTo(16.7);
+    }
+
+    /**
+     * Verifies that a property outside Dobong-gu receives a coordinate-based transport score and evidence.
+     */
+    @Test
+    void evaluatesTransportationNationwideWithoutDobongAddressMatch() {
+        setAddress(property, "부산광역시 부산진구 부전동 123");
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
+        when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
+        when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
+        var transportResult = new NationwideTransportScoreProvider.Result(
+                84.0,
+                "가장 가까운 지하철역은 서면역(약 420m)이며, 1km 내 지하철역이 2곳 있습니다.",
+                List.of(new AiEvaluationRespDto.ScoreEvidence(
+                        "NEAREST_SUBWAY_DISTANCE", "가장 가까운 지하철역", "420", "m",
+                        "500m 이하", 63.0, "전국 교통 POI")),
+                new AiEvaluationRespDto.ScoreCalculation(
+                        "최근접 지하철 거리 점수×70% + 1km 내 역 수 점수×30% = 84.0",
+                        "NATIONWIDE_TRANSPORT_V1")
+        );
+        when(nationwideTransportScoreProvider.evaluate(property.getCoordinate()))
+                .thenReturn(Optional.of(transportResult));
+        when(evaluationReportService.resolve(eq(property), anyList(), anyString(), any(), any(), any()))
+                .thenAnswer(invocation -> new AiEvaluationReportService.Resolution(
+                        invocation.getArgument(4), AiEvaluationReportService.RULE_BASED_MODEL_VERSION,
+                        LocalDateTime.now()));
+
+        AiEvaluationRespDto response = service.getAiEvaluation(1L);
+
+        AiEvaluationRespDto.CategoryScore transport = response.categories().stream()
+                .filter(category -> category.key() == AiEvaluationRespDto.CategoryKey.TRANSPORT)
+                .findFirst().orElseThrow();
+        assertThat(transport.rawScore()).isEqualTo(84.0);
+        assertThat(transport.source()).isEqualTo(AiEvaluationRespDto.ScoreSource.GEOSPATIAL_PIPELINE);
+        assertThat(transport.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::source)
+                .containsExactly("전국 교통 POI");
+        assertThat(response.scoreVersion()).isEqualTo("NATIONWIDE_EXPLAINABLE_V2");
+    }
+
+    private void setAddress(Property target, String address) {
+        try {
+            var field = Property.class.getDeclaredField("address");
+            field.setAccessible(true);
+            field.set(target, address);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     /**

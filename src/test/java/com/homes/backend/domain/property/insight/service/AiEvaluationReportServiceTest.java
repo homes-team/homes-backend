@@ -61,7 +61,7 @@ class AiEvaluationReportServiceTest {
         when(generator.isConfigured()).thenReturn(false);
 
         AiEvaluationReportService.Resolution result = service.resolve(
-                property, categories, "SCORE_V1", null, fallback, fallbackGeneratedAt);
+                property, categories.subList(0, 2), "SCORE_V1", null, fallback, fallbackGeneratedAt);
 
         assertThat(result.report()).isEqualTo(fallback);
         assertThat(result.modelVersion()).isEqualTo(AiEvaluationReportService.RULE_BASED_MODEL_VERSION);
@@ -90,6 +90,9 @@ class AiEvaluationReportServiceTest {
         ArgumentCaptor<PropertyAiReport> captor = ArgumentCaptor.forClass(PropertyAiReport.class);
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().getInputHash()).hasSize(64);
+        ArgumentCaptor<String> inputCaptor = ArgumentCaptor.forClass(String.class);
+        verify(generator).generate(inputCaptor.capture());
+        assertThat(inputCaptor.getValue()).contains("evidence", "calculation", "POLICY_TEST_V1");
     }
 
     private AiEvaluationRespDto.CategoryScore category(
@@ -103,7 +106,10 @@ class AiEvaluationReportServiceTest {
                 rawScore / 20.0,
                 AiEvaluationRespDto.ScoreStatus.AVAILABLE,
                 AiEvaluationRespDto.ScoreSource.EXTERNAL_DATA,
-                "설명"
+                "설명",
+                List.of(new AiEvaluationRespDto.ScoreEvidence(
+                        "TEST_METRIC", "테스트 지표", "300", "m", "500m 이하", 40.0, "테스트 데이터")),
+                new AiEvaluationRespDto.ScoreCalculation("테스트 계산식", "POLICY_TEST_V1")
         );
     }
 

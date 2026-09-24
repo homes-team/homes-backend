@@ -12,6 +12,7 @@ import java.time.Year;
  */
 @Component
 public class PropertyEvaluationScorePolicy {
+    static final String POLICY_VERSION = "PROPERTY_RULE_V2";
     private static final int MIN_REASONABLE_YEAR = 1800;
     private static final double BUILDING_YEAR_WEIGHT = 0.65;
     private static final double REMODELING_YEAR_WEIGHT = 0.35;
@@ -20,6 +21,18 @@ public class PropertyEvaluationScorePolicy {
      * 주실 방향의 기본 점수에 전체 층수 대비 현재 층수 보정을 더한다.
      */
     public Double calculateSunlightScore(PropertyDirection direction, Integer currentFloor, Integer totalFloors) {
+        SunlightScoreResult result = evaluateSunlight(direction, currentFloor, totalFloors);
+        return result == null ? null : result.score();
+    }
+
+    /**
+     * Calculates the sunlight score and exposes every numeric component used by the policy.
+     */
+    public SunlightScoreResult evaluateSunlight(
+            PropertyDirection direction,
+            Integer currentFloor,
+            Integer totalFloors
+    ) {
         if (direction == null || direction == PropertyDirection.UNKNOWN) {
             return null;
         }
@@ -35,7 +48,11 @@ public class PropertyEvaluationScorePolicy {
         };
 
         double floorAdjustment = calculateFloorAdjustment(currentFloor, totalFloors);
-        return round1(clamp(directionScore + floorAdjustment));
+        return new SunlightScoreResult(
+                round1(clamp(directionScore + floorAdjustment)),
+                directionScore,
+                floorAdjustment
+        );
     }
 
     /**
@@ -43,18 +60,33 @@ public class PropertyEvaluationScorePolicy {
      * 구조적 노후도 비중을 유지하기 위해 건축연도 65%, 리모델링 연도 35%로 계산한다.
      */
     public Double calculateBuildingConditionScore(Integer buildingYear, Integer remodelingYear) {
+        BuildingConditionScoreResult result = evaluateBuildingCondition(buildingYear, remodelingYear);
+        return result == null ? null : result.score();
+    }
+
+    /**
+     * Calculates the building-condition score and exposes its age and remodeling components.
+     */
+    public BuildingConditionScoreResult evaluateBuildingCondition(Integer buildingYear, Integer remodelingYear) {
         if (buildingYear == null) {
             return null;
         }
 
         double buildingScore = scoreYear(buildingYear);
         if (remodelingYear == null) {
-            return round1(buildingScore);
+            return new BuildingConditionScoreResult(round1(buildingScore), buildingScore, null,
+                    1.0, 0.0);
         }
 
         double remodelingScore = scoreYear(remodelingYear);
-        return round1(clamp(buildingScore * BUILDING_YEAR_WEIGHT
-                + remodelingScore * REMODELING_YEAR_WEIGHT));
+        return new BuildingConditionScoreResult(
+                round1(clamp(buildingScore * BUILDING_YEAR_WEIGHT
+                        + remodelingScore * REMODELING_YEAR_WEIGHT)),
+                buildingScore,
+                remodelingScore,
+                BUILDING_YEAR_WEIGHT,
+                REMODELING_YEAR_WEIGHT
+        );
     }
 
     /**
@@ -105,4 +137,18 @@ public class PropertyEvaluationScorePolicy {
     private double round1(double value) {
         return Math.round(value * 10.0) / 10.0;
     }
+
+    public record SunlightScoreResult(
+            double score,
+            double directionScore,
+            double floorAdjustment
+    ) {}
+
+    public record BuildingConditionScoreResult(
+            double score,
+            double buildingYearScore,
+            Double remodelingYearScore,
+            double buildingYearWeight,
+            double remodelingYearWeight
+    ) {}
 }

@@ -56,7 +56,7 @@ public class AiEvaluationReportService {
             LocalDateTime fallbackGeneratedAt
     ) {
         long availableCount = categories.stream().filter(category -> category.rawScore() != null).count();
-        if (availableCount < 4 || !reportGenerator.isConfigured()) {
+        if (availableCount < 2 || !reportGenerator.isConfigured()) {
             return fallback(fallback, fallbackGeneratedAt);
         }
 
@@ -170,7 +170,10 @@ public class AiEvaluationReportService {
             categoryInput.put("rawScore", category.rawScore());
             categoryInput.put("displayScore", category.displayScore());
             categoryInput.put("status", category.status().name());
+            categoryInput.put("source", category.source().name());
             categoryInput.put("description", category.description());
+            categoryInput.put("evidence", category.evidence());
+            categoryInput.put("calculation", category.calculation());
             return categoryInput;
         }).toList();
 
