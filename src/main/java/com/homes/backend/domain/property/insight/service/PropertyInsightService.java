@@ -1,6 +1,7 @@
 package com.homes.backend.domain.property.insight.service;
 
 import com.homes.backend.domain.property.entity.Property;
+import com.homes.backend.domain.property.entity.PropertyOption;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
 import com.homes.backend.domain.property.building.entity.PropertyBuildingInformation;
 import com.homes.backend.domain.property.building.repository.PropertyBuildingInformationRepository;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -35,6 +37,7 @@ public class PropertyInsightService {
     private final PropertyAiEvaluationRepository evaluationRepository;
     private final DobongAiDataset dobongAiDataset;
     private final KakaoNearbySchoolProvider nearbySchoolProvider;
+    private final KakaoNearbyInfrastructureProvider nearbyInfrastructureProvider;
     private final NationwideTransportScoreProvider nationwideTransportScoreProvider;
     private final PropertyBuildingInformationRepository buildingInformationRepository;
     private final PropertyEvaluationScorePolicy evaluationScorePolicy;
@@ -54,6 +57,8 @@ public class PropertyInsightService {
                 : Optional.empty();
         Optional<KakaoNearbySchoolProvider.Result> nearbySchools =
                 nearbySchoolProvider.evaluate(property.getCoordinate());
+        Optional<KakaoNearbyInfrastructureProvider.Result> nearbyInfrastructure =
+                nearbyInfrastructureProvider.evaluate(property.getCoordinate());
         Optional<NationwideTransportScoreProvider.Result> nationwideTransport = dataset.isEmpty()
                 ? nationwideTransportScoreProvider.evaluate(property.getCoordinate())
                 : Optional.empty();
@@ -78,12 +83,20 @@ public class PropertyInsightService {
                 .orElseGet(() -> sunlightResult == null ? null : sunlightResult.score());
         Integer buildingYear = buildingInformation.map(PropertyBuildingInformation::getBuildingYear)
                 .orElseGet(() -> dataset.map(DobongAiDataset.Entry::buildYear).orElse(null));
+        boolean hasElevator = buildingInformation.map(info -> positive(info.getElevatorCount()))
+                .orElseGet(() -> property.getOptions().contains(PropertyOption.ELEVATOR));
+        boolean hasParking = buildingInformation.map(info -> positive(info.getParkingCount()))
+                .orElseGet(() -> property.getOptions().contains(PropertyOption.PARKING));
+        String heatingType = buildingInformation.map(PropertyBuildingInformation::getHeatingType).orElse(null);
         PropertyEvaluationScorePolicy.BuildingConditionScoreResult buildingResult =
-                evaluationScorePolicy.evaluateBuildingCondition(buildingYear, property.getRemodelingYear());
+                evaluationScorePolicy.evaluateBuildingCondition(buildingYear, property.getRemodelingYear(),
+                        hasElevator, hasParking, heatingType != null && !heatingType.isBlank());
         Double buildingScore = stored.map(PropertyAiEvaluation::getBuildingConditionScore)
                 .orElseGet(() -> buildingResult == null ? null : buildingResult.score());
         Double infrastructureScore = stored.map(PropertyAiEvaluation::getInfrastructureScore)
-                .orElseGet(() -> dataset.map(PropertyInsightService::calculateInfrastructureScore).orElse(null));
+                .orElseGet(() -> dataset.map(PropertyInsightService::calculateInfrastructureScore)
+                        .orElseGet(() -> nearbyInfrastructure
+                                .map(KakaoNearbyInfrastructureProvider.Result::score).orElse(null)));
 
         ScoreSource legacyOrStoredSource = dataset.isPresent()
                 ? ScoreSource.EXTERNAL_DATA : ScoreSource.GEOSPATIAL_PIPELINE;
@@ -107,12 +120,15 @@ public class PropertyInsightService {
                         sunlightDescription(property), sunlightEvidence(property, sunlightResult),
                         sunlightCalculation(sunlightResult)),
                 category(CategoryKey.BUILDING_CONDITION, "건물 상태", buildingScore, buildingSource,
-                        buildingDescription(buildingYear, property.getRemodelingYear()),
-                        buildingEvidence(buildingYear, property.getRemodelingYear(), buildingResult),
+                        buildingDescription(buildingYear, property.getRemodelingYear(), hasElevator,
+                                hasParking, heatingType),
+                        buildingEvidence(buildingYear, property.getRemodelingYear(), hasElevator,
+                                hasParking, heatingType, buildingResult),
                         buildingCalculation(buildingResult)),
                 category(CategoryKey.INFRASTRUCTURE, "인프라", infrastructureScore, legacyOrStoredSource,
-                        infrastructureDescription(dataset), infrastructureEvidence(dataset),
-                        precomputedCalculation(infrastructureScore, dataset, stored))
+                        infrastructureDescription(dataset, nearbyInfrastructure),
+                        infrastructureEvidence(dataset, nearbyInfrastructure),
+                        infrastructureCalculation(infrastructureScore, dataset, stored, nearbyInfrastructure))
         );
 
         List<Double> availableScores = categories.stream().map(CategoryScore::rawScore).filter(v -> v != null).toList();
@@ -129,7 +145,7 @@ public class PropertyInsightService {
         String scoreVersion = stored.map(PropertyAiEvaluation::getScoreVersion)
                 .orElseGet(() -> dataset.isPresent()
                         ? "DOBONG_GEOSPATIAL_V1"
-                        : nearbySchools.isPresent() || nationwideTransport.isPresent()
+                        : nearbySchools.isPresent() || nationwideTransport.isPresent() || nearbyInfrastructure.isPresent()
                                 ? "NATIONWIDE_EXPLAINABLE_V3" : "PROPERTY_RULE_V2");
         AiEvaluationReportService.Resolution reportResolution = evaluationReportService.resolve(
                 property, categories, scoreVersion, notice, ruleBasedReport, scoreGeneratedAt);
@@ -333,14 +349,24 @@ public class PropertyInsightService {
      * @param remodelingYear latest remodeling year, or {@code null} when unavailable
      * @return building-condition description
      */
-    private String buildingDescription(Integer buildingYear, Integer remodelingYear) {
+    private String buildingDescription(
+            Integer buildingYear,
+            Integer remodelingYear,
+            boolean hasElevator,
+            boolean hasParking,
+            String heatingType
+    ) {
         if (buildingYear == null) {
             return "준공연도가 수집되면 건물 상태 평가에 반영됩니다.";
         }
-        if (remodelingYear != null) {
-            return buildingYear + "년 준공 및 " + remodelingYear + "년 리모델링 정보를 기준으로 산정한 점수입니다.";
-        }
-        return buildingYear + "년 준공 정보를 기준으로 산정한 점수입니다.";
+        int age = Math.max(0, Year.now().getValue() - buildingYear);
+        List<String> facts = new ArrayList<>();
+        facts.add(buildingYear + "년 준공, 현재 " + age + "년차");
+        if (remodelingYear != null) facts.add(remodelingYear + "년 인테리어");
+        facts.add(hasElevator ? "엘리베이터 있음" : "엘리베이터 정보 없음");
+        facts.add(hasParking ? "주차 가능" : "주차 정보 없음");
+        if (heatingType != null && !heatingType.isBlank()) facts.add(heatingType);
+        return String.join(" · ", facts) + "을 반영했습니다.";
     }
 
     /**
@@ -349,10 +375,14 @@ public class PropertyInsightService {
      * @param dataset matching dataset entry
      * @return infrastructure-category description
      */
-    private String infrastructureDescription(Optional<DobongAiDataset.Entry> dataset) {
-        return dataset.map(entry -> "병원·마트·문화시설 점수를 동일 가중 평균했습니다. 가까운 병원은 "
+    private String infrastructureDescription(
+            Optional<DobongAiDataset.Entry> dataset,
+            Optional<KakaoNearbyInfrastructureProvider.Result> nearbyInfrastructure
+    ) {
+        return nearbyInfrastructure.map(KakaoNearbyInfrastructureProvider.Result::description)
+                .orElseGet(() -> dataset.map(entry -> "병원·마트·문화시설 점수를 동일 가중 평균했습니다. 가까운 병원은 "
                 + entry.nearestHospital() + "이며 약 " + Math.round(entry.hospitalDistanceMeters()) + "m 거리입니다.")
-                .orElse("병원, 마트, 문화시설 등 생활 편의시설 접근성을 기준으로 산정합니다.");
+                .orElse("병원, 마트, 문화시설 등 생활 편의시설 접근성을 기준으로 산정합니다."));
     }
 
     private List<ScoreEvidence> schoolEvidence(
@@ -420,22 +450,37 @@ public class PropertyInsightService {
     private List<ScoreEvidence> buildingEvidence(
             Integer buildingYear,
             Integer remodelingYear,
+            boolean hasElevator,
+            boolean hasParking,
+            String heatingType,
             PropertyEvaluationScorePolicy.BuildingConditionScoreResult result
     ) {
         if (buildingYear == null || result == null) return List.of();
         List<ScoreEvidence> evidence = new ArrayList<>();
-        evidence.add(new ScoreEvidence("BUILDING_YEAR", "준공연도", String.valueOf(buildingYear), "년",
+        evidence.add(new ScoreEvidence("BUILDING_AGE", "건물 연식",
+                buildingYear + "년 준공 · " + Math.max(0, Year.now().getValue() - buildingYear) + "년차", null,
                 "연식 1년당 2점 차감, 최저 20점",
                 round1(result.buildingYearScore() * result.buildingYearWeight()), "건축물 정보"));
         if (remodelingYear != null && result.remodelingYearScore() != null) {
-            evidence.add(new ScoreEvidence("REMODELING_YEAR", "리모델링 연도",
+            evidence.add(new ScoreEvidence("REMODELING_YEAR", "최근 인테리어",
                     String.valueOf(remodelingYear), "년", "리모델링 연도 점수 35% 반영",
                     round1(result.remodelingYearScore() * result.remodelingYearWeight()), "매물 입력 정보"));
         }
+        evidence.add(new ScoreEvidence("ELEVATOR", "엘리베이터", hasElevator ? "있음" : "정보 없음",
+                null, "건물 편의시설", null, "건축물·매물 정보"));
+        evidence.add(new ScoreEvidence("PARKING", "주차", hasParking ? "가능" : "정보 없음",
+                null, "건물 편의시설", null, "건축물·매물 정보"));
+        evidence.add(new ScoreEvidence("HEATING", "난방",
+                heatingType == null || heatingType.isBlank() ? "정보 없음" : heatingType,
+                null, "건물 편의시설", null, "건축물 정보"));
         return List.copyOf(evidence);
     }
 
-    private List<ScoreEvidence> infrastructureEvidence(Optional<DobongAiDataset.Entry> dataset) {
+    private List<ScoreEvidence> infrastructureEvidence(
+            Optional<DobongAiDataset.Entry> dataset,
+            Optional<KakaoNearbyInfrastructureProvider.Result> nearbyInfrastructure
+    ) {
+        if (nearbyInfrastructure.isPresent()) return nearbyInfrastructure.get().evidence();
         return dataset.map(entry -> List.of(
                 evidence("NEAREST_HOSPITAL_DISTANCE", "가장 가까운 병원", entry.hospitalDistanceMeters(),
                         "m", "병원 접근 거리 반영", null, "도봉구 지리 데이터셋"),
@@ -449,6 +494,21 @@ public class PropertyInsightService {
                         String.valueOf(entry.cultureScore()), "점", "동일 가중 평균",
                         round1(entry.cultureScore() / 3.0), "도봉구 지리 데이터셋")
         )).orElse(List.of());
+    }
+
+    private ScoreCalculation infrastructureCalculation(
+            Double score,
+            Optional<DobongAiDataset.Entry> dataset,
+            Optional<PropertyAiEvaluation> stored,
+            Optional<KakaoNearbyInfrastructureProvider.Result> nearbyInfrastructure
+    ) {
+        if (score == null) return null;
+        if (stored.isPresent() || dataset.isPresent()) return precomputedCalculation(score, dataset, stored);
+        return nearbyInfrastructure.map(KakaoNearbyInfrastructureProvider.Result::calculation).orElse(null);
+    }
+
+    private boolean positive(Integer value) {
+        return value != null && value > 0;
     }
 
     private ScoreEvidence evidence(
@@ -503,8 +563,9 @@ public class PropertyInsightService {
     ) {
         if (result == null) return null;
         String formula = result.remodelingYearScore() == null
-                ? "준공연도 점수 = " + result.score()
-                : "준공연도 점수×65% + 리모델링 연도 점수×35% = " + result.score();
+                ? "준공연도 점수 + 편의시설 보정 = " + result.score()
+                : "준공연도 점수×65% + 리모델링 연도 점수×35% + 편의시설 보정 "
+                        + result.facilityAdjustment() + " = " + result.score();
         return new ScoreCalculation(formula, PropertyEvaluationScorePolicy.POLICY_VERSION);
     }
 

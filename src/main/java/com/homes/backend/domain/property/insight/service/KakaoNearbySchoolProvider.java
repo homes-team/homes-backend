@@ -32,7 +32,9 @@ import java.util.Optional;
 public class KakaoNearbySchoolProvider {
     static final String POLICY_VERSION = "NATIONWIDE_SCHOOL_V1";
     private static final String SEARCH_URL = "https://dapi.kakao.com/v2/local/search/keyword.json";
+    private static final String CATEGORY_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/category.json";
     private static final int SEARCH_RADIUS_METERS = 20_000;
+    private static final int COUNT_RADIUS_METERS = 1_000;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -74,7 +76,7 @@ public class KakaoNearbySchoolProvider {
                 .mapToDouble(school -> distanceScore(school.distanceMeters()))
                 .average()
                 .orElse(0.0));
-        List<ScoreEvidence> evidence = schools.stream()
+        List<ScoreEvidence> evidence = new ArrayList<>(schools.stream()
                 .map(school -> new ScoreEvidence(
                         "NEAREST_" + school.level().name() + "_SCHOOL",
                         "가장 가까운 " + school.level().label(),
@@ -84,7 +86,16 @@ public class KakaoNearbySchoolProvider {
                         round1(distanceScore(school.distanceMeters()) / schools.size()),
                         "카카오 로컬 학교 검색"
                 ))
-                .toList();
+                .toList());
+        countSchoolsWithinOneKilometer(coordinate).ifPresent(count -> evidence.add(new ScoreEvidence(
+                "SCHOOL_COUNT_WITHIN_1KM",
+                "1km 내 학교",
+                count + "곳",
+                null,
+                "초·중·고교 합계",
+                null,
+                "카카오 로컬 학교 검색"
+        )));
         String description = schools.stream()
                 .map(school -> school.level().shortLabel() + " " + school.name()
                         + "(약 " + Math.round(school.distanceMeters()) + "m)")
@@ -96,6 +107,30 @@ public class KakaoNearbySchoolProvider {
         );
         return Optional.of(new Result(score, "가장 가까운 학교는 " + description + "입니다.",
                 List.copyOf(evidence), calculation));
+    }
+
+    private Optional<Integer> countSchoolsWithinOneKilometer(Point coordinate) {
+        URI uri = UriComponentsBuilder.fromUriString(CATEGORY_SEARCH_URL)
+                .queryParam("category_group_code", "SC4")
+                .queryParam("x", coordinate.getX())
+                .queryParam("y", coordinate.getY())
+                .queryParam("radius", COUNT_RADIUS_METERS)
+                .queryParam("sort", "distance")
+                .queryParam("size", 1)
+                .build()
+                .toUri();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "KakaoAK " + kakaoRestApiKey);
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    uri, HttpMethod.GET, new HttpEntity<Void>(headers), String.class);
+            JsonNode meta = objectMapper.readTree(response.getBody()).path("meta");
+            return meta.has("total_count") ? Optional.of(meta.path("total_count").asInt()) : Optional.empty();
+        } catch (Exception exception) {
+            log.warn("카카오 반경 내 학교 수 조회 실패: longitude={}, latitude={}",
+                    coordinate.getX(), coordinate.getY(), exception);
+            return Optional.empty();
+        }
     }
 
     private Optional<SchoolPlace> findNearest(Point coordinate, SchoolLevel level) {

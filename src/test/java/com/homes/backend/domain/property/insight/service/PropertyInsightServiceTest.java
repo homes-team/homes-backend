@@ -35,6 +35,7 @@ class PropertyInsightServiceTest {
     @Mock PropertyAiEvaluationRepository evaluationRepository;
     @Mock DobongAiDataset dobongAiDataset;
     @Mock KakaoNearbySchoolProvider nearbySchoolProvider;
+    @Mock KakaoNearbyInfrastructureProvider nearbyInfrastructureProvider;
     @Mock NationwideTransportScoreProvider nationwideTransportScoreProvider;
     @Mock PropertyBuildingInformationRepository buildingInformationRepository;
     @Mock AiEvaluationReportService evaluationReportService;
@@ -48,7 +49,8 @@ class PropertyInsightServiceTest {
     @BeforeEach
     void setUp() {
         service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset,
-                nearbySchoolProvider, nationwideTransportScoreProvider, buildingInformationRepository,
+                nearbySchoolProvider, nearbyInfrastructureProvider, nationwideTransportScoreProvider,
+                buildingInformationRepository,
                 new PropertyEvaluationScorePolicy(), evaluationReportService);
         Point point = new GeometryFactory().createPoint(new Coordinate(127.0471, 37.6688));
         point.setSRID(4326);

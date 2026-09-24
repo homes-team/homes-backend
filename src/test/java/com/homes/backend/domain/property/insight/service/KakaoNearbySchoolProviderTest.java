@@ -27,6 +27,10 @@ class KakaoNearbySchoolProviderTest {
         expectSchoolResponse(server, "도봉초등학교", "교육,학문 > 학교 > 초등학교", "300");
         expectSchoolResponse(server, "도봉중학교", "교육,학문 > 학교 > 중학교", "900");
         expectSchoolResponse(server, "도봉고등학교", "교육,학문 > 학교 > 고등학교", "1500");
+        server.expect(once(), requestTo(containsString("category_group_code=SC4")))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"meta\":{\"total_count\":7},\"documents\":[]}",
+                        MediaType.APPLICATION_JSON));
         KakaoNearbySchoolProvider provider =
                 new KakaoNearbySchoolProvider(restTemplate, new ObjectMapper(), "test-key");
         Point coordinate = new GeometryFactory().createPoint(new Coordinate(127.0471, 37.6688));
@@ -36,9 +40,10 @@ class KakaoNearbySchoolProviderTest {
         assertThat(result.score()).isEqualTo(80.0);
         assertThat(result.description()).contains("도봉초등학교", "도봉중학교", "도봉고등학교");
         assertThat(result.evidence()).extracting(evidence -> evidence.value())
-                .containsExactly("도봉초등학교 · 300m", "도봉중학교 · 900m", "도봉고등학교 · 1500m");
+                .containsExactly("도봉초등학교 · 300m", "도봉중학교 · 900m", "도봉고등학교 · 1500m", "7곳");
         assertThat(result.evidence()).extracting(evidence -> evidence.label())
-                .containsExactly("가장 가까운 초등학교", "가장 가까운 중학교", "가장 가까운 고등학교");
+                .containsExactly("가장 가까운 초등학교", "가장 가까운 중학교", "가장 가까운 고등학교",
+                        "1km 내 학교");
         server.verify();
     }
 

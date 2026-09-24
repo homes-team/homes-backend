@@ -68,24 +68,41 @@ public class PropertyEvaluationScorePolicy {
      * Calculates the building-condition score and exposes its age and remodeling components.
      */
     public BuildingConditionScoreResult evaluateBuildingCondition(Integer buildingYear, Integer remodelingYear) {
+        return evaluateBuildingCondition(buildingYear, remodelingYear, false, false, false);
+    }
+
+    /**
+     * Calculates condition from age and interior year, then applies small convenience-facility adjustments.
+     */
+    public BuildingConditionScoreResult evaluateBuildingCondition(
+            Integer buildingYear,
+            Integer remodelingYear,
+            boolean hasElevator,
+            boolean hasParking,
+            boolean hasHeatingInformation
+    ) {
         if (buildingYear == null) {
             return null;
         }
 
         double buildingScore = scoreYear(buildingYear);
+        double facilityAdjustment = (hasElevator ? 2.0 : 0.0)
+                + (hasParking ? 2.0 : 0.0)
+                + (hasHeatingInformation ? 2.0 : 0.0);
         if (remodelingYear == null) {
-            return new BuildingConditionScoreResult(round1(buildingScore), buildingScore, null,
-                    1.0, 0.0);
+            return new BuildingConditionScoreResult(round1(clamp(buildingScore + facilityAdjustment)),
+                    buildingScore, null, 1.0, 0.0, facilityAdjustment);
         }
 
         double remodelingScore = scoreYear(remodelingYear);
         return new BuildingConditionScoreResult(
                 round1(clamp(buildingScore * BUILDING_YEAR_WEIGHT
-                        + remodelingScore * REMODELING_YEAR_WEIGHT)),
+                        + remodelingScore * REMODELING_YEAR_WEIGHT + facilityAdjustment)),
                 buildingScore,
                 remodelingScore,
                 BUILDING_YEAR_WEIGHT,
-                REMODELING_YEAR_WEIGHT
+                REMODELING_YEAR_WEIGHT,
+                facilityAdjustment
         );
     }
 
@@ -149,6 +166,7 @@ public class PropertyEvaluationScorePolicy {
             double buildingYearScore,
             Double remodelingYearScore,
             double buildingYearWeight,
-            double remodelingYearWeight
+            double remodelingYearWeight,
+            double facilityAdjustment
     ) {}
 }

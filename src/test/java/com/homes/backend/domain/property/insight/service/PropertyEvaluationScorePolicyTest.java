@@ -39,6 +39,16 @@ class PropertyEvaluationScorePolicyTest {
         assertThat(policy.calculateBuildingConditionScore(currentYear - 20, currentYear)).isEqualTo(74.0);
     }
 
+    @Test
+    void reflectsElevatorParkingAndHeatingInBuildingCondition() {
+        int currentYear = Year.now().getValue();
+        var result = policy.evaluateBuildingCondition(
+                currentYear - 20, currentYear, true, true, true);
+
+        assertThat(result.score()).isEqualTo(80.0);
+        assertThat(result.facilityAdjustment()).isEqualTo(6.0);
+    }
+
     /**
      * Verifies the lower, construction-year, and current-year boundaries.
      */
