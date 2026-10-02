@@ -142,6 +142,7 @@ public class SecurityConfig {
                                 "/properties/map",
                                 "/properties/surge-rankings",
                                 "/properties/*/verifications",
+                                "/properties/infrastructure",
                                 // 중개사 회원가입(계정/토큰이 아직 없는 상태)에서도 서류 이미지를 미리 업로드해야 해서 로그인 없이 허용
                                 "/properties/presigned-url"
                         ).permitAll()
