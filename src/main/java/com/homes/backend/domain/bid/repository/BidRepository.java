@@ -91,4 +91,11 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
     @Modifying
     @Query("UPDATE Bid b SET b.status = 'REJECTED' WHERE b.property.id = :propertyId AND b.id != :acceptedBidId AND b.status = 'PENDING'")
     void rejectOtherPendingBids(@Param("propertyId") Long propertyId, @Param("acceptedBidId") Long acceptedBidId);
+
+    /**
+     * 리뷰 작성 자격 검증용 - 이 유저(집주인) 소유의 매물에, 이 중개사가 ACCEPTED(매칭 성사)된 입찰을
+     * 한 번이라도 넣은 적이 있는지 확인한다. 거래완료 여부(Property.status)와는 무관하게,
+     * "매칭된 적이 있다"는 사실만 확인하면 리뷰 자격은 충분하다고 본다.
+     */
+    boolean existsByAgentIdAndPropertyUserIdAndStatus(Long agentId, Long propertyUserId, BidStatus status);
 }
