@@ -19,7 +19,7 @@ import java.util.Optional;
 @Component
 public class OpenAiEvaluationReportGenerator implements AiEvaluationReportGenerator {
     static final String MODEL = "gpt-5-nano";
-    static final String MODEL_VERSION = "OPENAI_GPT_5_NANO_EVIDENCE_V2";
+    static final String MODEL_VERSION = "OPENAI_GPT_5_NANO_EVIDENCE_V3";
 
     private static final String SYSTEM_PROMPT = """
             당신은 부동산 매물의 생활 여건을 설명하는 분석가입니다.
@@ -28,6 +28,7 @@ public class OpenAiEvaluationReportGenerator implements AiEvaluationReportGenera
             강점과 약점에는 반드시 해당 항목의 실제 거리, 시설 수, 방향, 층수 또는 연도 중 하나를 근거로 포함하세요.
             데이터 수집률이나 수집 진행 상황보다 왜 해당 점수가 산정되었는지를 우선 설명하세요.
             강점과 약점은 각각 최대 3개이며, evidence가 없으면 해당 항목을 언급하지 마세요.
+            작성 규칙이나 지시문 자체를 요약하거나 출력하지 마세요. 약점을 뒷받침할 근거가 없으면 weaknesses는 빈 배열로 반환하세요.
             """;
 
     private final OpenAiApiProperties properties;
@@ -125,6 +126,10 @@ public class OpenAiEvaluationReportGenerator implements AiEvaluationReportGenera
             return Optional.empty();
         }
 
+        if (isInstructionLike(summary)) {
+            return Optional.empty();
+        }
+
         return Optional.of(new GeneratedReport(
                 summary,
                 stringList(reportNode.path("strengths")),
@@ -153,7 +158,7 @@ public class OpenAiEvaluationReportGenerator implements AiEvaluationReportGenera
         List<String> values = new ArrayList<>();
         for (JsonNode item : node) {
             String value = item.asText("").trim();
-            if (!value.isEmpty()) {
+            if (!value.isEmpty() && !isInstructionLike(value)) {
                 values.add(value);
             }
             if (values.size() == 3) {
@@ -161,5 +166,15 @@ public class OpenAiEvaluationReportGenerator implements AiEvaluationReportGenera
             }
         }
         return List.copyOf(values);
+    }
+
+    private boolean isInstructionLike(String value) {
+        String normalized = value.toLowerCase();
+        return normalized.contains("강점과 약점")
+                || normalized.contains("최대 3개")
+                || normalized.contains("evidence")
+                || normalized.contains("항목을 언급")
+                || normalized.contains("작성 규칙")
+                || normalized.contains("지시문");
     }
 }

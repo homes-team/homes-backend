@@ -64,7 +64,8 @@ public class NationwideTransportScoreProvider {
             evidence.add(new ScoreEvidence(
                         "NEAREST_SUBWAY_DISTANCE",
                         "가장 가까운 지하철역",
-                        nearestSubway.getPoiName() + " · " + Math.round(nearestSubway.getDistance()) + "m",
+                        normalizeSubwayName(nearestSubway.getPoiName()) + " · "
+                                + Math.round(nearestSubway.getDistance()) + "m",
                         null,
                         subwayDistanceCriterion(nearestSubway.getDistance()),
                         subwayContribution,
@@ -158,7 +159,7 @@ public class NationwideTransportScoreProvider {
     ) {
         List<String> facts = new ArrayList<>();
         if (hasValidDistance(subway)) {
-            facts.add("가장 가까운 지하철역은 " + subway.getPoiName() + "(약 "
+            facts.add("가장 가까운 지하철역은 " + normalizeSubwayName(subway.getPoiName()) + "(약 "
                     + Math.round(subway.getDistance()) + "m)");
         }
         if (hasValidDistance(bus)) {
@@ -167,6 +168,13 @@ public class NationwideTransportScoreProvider {
         }
         return String.join(", ", facts) + "이며, 1km 내 지하철역 " + subwayCount
                 + "곳과 500m 내 버스정류장 " + busCount + "곳을 점수에 반영했습니다.";
+    }
+
+    private String normalizeSubwayName(String poiName) {
+        if (poiName == null || poiName.isBlank()) {
+            return "이름 미상";
+        }
+        return poiName.trim().replaceFirst("역{2,}$", "역");
     }
 
     private double round1(double value) {

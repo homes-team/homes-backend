@@ -51,4 +51,22 @@ class NationwideTransportScoreProviderTest {
         assertThat(result.calculation().policyVersion())
                 .isEqualTo(NationwideTransportScoreProvider.POLICY_VERSION);
     }
+
+    @Test
+    void removesDuplicatedStationSuffixFromDescriptionAndEvidence() {
+        StationRepository repository = mock(StationRepository.class);
+        NationwideTransportScoreProvider provider = new NationwideTransportScoreProvider(repository);
+        Point coordinate = new GeometryFactory().createPoint(new Coordinate(127.044, 37.665));
+
+        StationDistanceProjection nearestSubway = mock(StationDistanceProjection.class);
+        when(nearestSubway.getPoiName()).thenReturn("방학역역");
+        when(nearestSubway.getDistance()).thenReturn(1_345.0);
+        when(repository.findNearestByPoiType(eq(coordinate), eq("지하철역"), anyDouble()))
+                .thenReturn(nearestSubway);
+
+        NationwideTransportScoreProvider.Result result = provider.evaluate(coordinate).orElseThrow();
+
+        assertThat(result.description()).contains("방학역(약 1345m)").doesNotContain("방학역역");
+        assertThat(result.evidence().get(0).value()).isEqualTo("방학역 · 1345m");
+    }
 }

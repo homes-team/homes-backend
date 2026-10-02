@@ -70,4 +70,44 @@ class OpenAiEvaluationReportGeneratorTest {
         assertThat(report.strengths()).containsExactly("교통이 편리합니다.");
         assertThat(report.weaknesses()).isEmpty();
     }
+
+    @Test
+    void removesPromptLikeStatementsFromGeneratedLists() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/v1/responses", exchange -> {
+            String reportJson = objectMapper.writeValueAsString(Map.of(
+                    "summary", "생활 인프라가 풍부하지만 교통 접근성은 확인이 필요합니다.",
+                    "strengths", List.of("반경 1km 안에 병원이 100곳 있습니다."),
+                    "weaknesses", List.of(
+                            "강점과 약점은 최대 3개이며 evidence가 없으면 언급하지 않습니다.",
+                            "가장 가까운 지하철역이 1345m 떨어져 있습니다."
+                    )
+            ));
+            byte[] response = objectMapper.writeValueAsBytes(Map.of(
+                    "output", List.of(Map.of(
+                            "type", "message",
+                            "content", List.of(Map.of("type", "output_text", "text", reportJson))
+                    ))
+            ));
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        OpenAiApiProperties properties = new OpenAiApiProperties();
+        properties.setApiKey("test-key");
+        properties.setBaseUrl("http://localhost:" + server.getAddress().getPort());
+        OpenAiEvaluationReportGenerator generator =
+                new OpenAiEvaluationReportGenerator(properties, objectMapper);
+
+        AiEvaluationReportGenerator.GeneratedReport report =
+                generator.generate("{\"categories\":[]}").orElseThrow();
+
+        assertThat(generator.modelVersion()).isEqualTo("OPENAI_GPT_5_NANO_EVIDENCE_V3");
+        assertThat(report.strengths()).containsExactly("반경 1km 안에 병원이 100곳 있습니다.");
+        assertThat(report.weaknesses()).containsExactly("가장 가까운 지하철역이 1345m 떨어져 있습니다.");
+    }
 }
