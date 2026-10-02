@@ -58,7 +58,7 @@ public record PropertyListRespDto(
                 property.getDescription(),
                 property.getCreatedAt(),
                 property.getAiScore(),
-                property.getOptions(),
+                List.copyOf(property.getOptions()),
                 property.getNearestStation(),
                 property.getWalkingTime(),
                 property.getFavoriteCount(),

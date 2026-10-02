@@ -20,18 +20,26 @@ import org.locationtech.jts.geom.Point;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import com.homes.backend.domain.property.insight.entity.PropertyAiEvaluation;
 
 @ExtendWith(MockitoExtension.class)
 class PropertyInsightServiceTest {
     @Mock PropertyRepository propertyRepository;
     @Mock PropertyAiEvaluationRepository evaluationRepository;
     @Mock DobongAiDataset dobongAiDataset;
+    @Mock KakaoNearbySchoolProvider nearbySchoolProvider;
+    @Mock KakaoNearbyInfrastructureProvider nearbyInfrastructureProvider;
+    @Mock NationwideTransportScoreProvider nationwideTransportScoreProvider;
     @Mock PropertyBuildingInformationRepository buildingInformationRepository;
+    @Mock AiEvaluationReportService evaluationReportService;
 
     private PropertyInsightService service;
     private Property property;
@@ -42,7 +50,9 @@ class PropertyInsightServiceTest {
     @BeforeEach
     void setUp() {
         service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset,
-                buildingInformationRepository, new PropertyEvaluationScorePolicy());
+                nearbySchoolProvider, nearbyInfrastructureProvider, nationwideTransportScoreProvider,
+                buildingInformationRepository,
+                new PropertyEvaluationScorePolicy(), evaluationReportService);
         Point point = new GeometryFactory().createPoint(new Coordinate(127.0471, 37.6688));
         point.setSRID(4326);
         property = Property.builder()
@@ -83,17 +93,177 @@ class PropertyInsightServiceTest {
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
         when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
         when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
+        when(nearbySchoolProvider.evaluate(property.getCoordinate())).thenReturn(Optional.empty());
+        when(nationwideTransportScoreProvider.evaluate(property.getCoordinate())).thenReturn(Optional.empty());
         when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
+        when(evaluationReportService.resolve(
+                eq(property), anyList(), anyString(), any(), any(), any()))
+                .thenAnswer(invocation -> new AiEvaluationReportService.Resolution(
+                        invocation.getArgument(4),
+                        AiEvaluationReportService.RULE_BASED_MODEL_VERSION,
+                        invocation.getArgument(5)
+                ));
 
         AiEvaluationRespDto response = service.getAiEvaluation(1L);
 
         assertThat(response.categories()).hasSize(6);
         assertThat(response.categories().stream()
                 .filter(category -> category.key() == AiEvaluationRespDto.CategoryKey.SUNLIGHT)
-                .findFirst().orElseThrow().status()).isEqualTo(AiEvaluationRespDto.ScoreStatus.AVAILABLE);
+                .findFirst().orElseThrow())
+                .satisfies(category -> {
+                    assertThat(category.status()).isEqualTo(AiEvaluationRespDto.ScoreStatus.AVAILABLE);
+                    assertThat(category.evidence()).hasSize(2);
+                    assertThat(category.calculation().policyVersion()).isEqualTo("PROPERTY_RULE_V2");
+                });
         assertThat(response.overall().rawScore()).isNull();
         assertThat(response.overall().displayScore()).isNull();
         assertThat(response.overall().completeness()).isEqualTo(16.7);
+    }
+
+    /**
+     * Verifies that a property outside Dobong-gu receives a coordinate-based transport score and evidence.
+     */
+    @Test
+    void evaluatesTransportationNationwideWithoutDobongAddressMatch() {
+        setAddress(property, "부산광역시 부산진구 부전동 123");
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
+        when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
+        when(nearbySchoolProvider.evaluate(property.getCoordinate())).thenReturn(Optional.empty());
+        when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
+        var transportResult = new NationwideTransportScoreProvider.Result(
+                84.0,
+                "가장 가까운 지하철역은 서면역(약 420m)이며, 1km 내 지하철역이 2곳 있습니다.",
+                List.of(new AiEvaluationRespDto.ScoreEvidence(
+                        "NEAREST_SUBWAY_DISTANCE", "가장 가까운 지하철역", "420", "m",
+                        "500m 이하", 63.0, "전국 교통 POI")),
+                new AiEvaluationRespDto.ScoreCalculation(
+                        "최근접 지하철 거리 점수×70% + 1km 내 역 수 점수×30% = 84.0",
+                        "NATIONWIDE_TRANSPORT_V1")
+        );
+        when(nationwideTransportScoreProvider.evaluate(property.getCoordinate()))
+                .thenReturn(Optional.of(transportResult));
+        when(evaluationReportService.resolve(eq(property), anyList(), anyString(), any(), any(), any()))
+                .thenAnswer(invocation -> new AiEvaluationReportService.Resolution(
+                        invocation.getArgument(4), AiEvaluationReportService.RULE_BASED_MODEL_VERSION,
+                        LocalDateTime.now()));
+
+        AiEvaluationRespDto response = service.getAiEvaluation(1L);
+
+        AiEvaluationRespDto.CategoryScore transport = response.categories().stream()
+                .filter(category -> category.key() == AiEvaluationRespDto.CategoryKey.TRANSPORT)
+                .findFirst().orElseThrow();
+        assertThat(transport.rawScore()).isEqualTo(84.0);
+        assertThat(transport.source()).isEqualTo(AiEvaluationRespDto.ScoreSource.GEOSPATIAL_PIPELINE);
+        assertThat(transport.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::source)
+                .containsExactly("전국 교통 POI");
+        assertThat(response.scoreVersion()).isEqualTo("NATIONWIDE_EXPLAINABLE_V3");
+    }
+
+    @Test
+    void exposesNearestElementaryMiddleAndHighSchoolNames() {
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
+        when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
+        when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
+        when(nationwideTransportScoreProvider.evaluate(property.getCoordinate())).thenReturn(Optional.empty());
+        var schoolResult = new KakaoNearbySchoolProvider.Result(
+                90.0,
+                "가장 가까운 학교는 초 도봉초등학교(약 300m), 중 도봉중학교(약 500m), 고 도봉고등학교(약 700m)입니다.",
+                List.of(
+                        new AiEvaluationRespDto.ScoreEvidence("NEAREST_ELEMENTARY_SCHOOL",
+                                "가장 가까운 초등학교", "도봉초등학교 · 300m", null,
+                                "500m 이하", 33.3, "카카오 로컬 학교 검색"),
+                        new AiEvaluationRespDto.ScoreEvidence("NEAREST_MIDDLE_SCHOOL",
+                                "가장 가까운 중학교", "도봉중학교 · 500m", null,
+                                "500m 이하", 33.3, "카카오 로컬 학교 검색"),
+                        new AiEvaluationRespDto.ScoreEvidence("NEAREST_HIGH_SCHOOL",
+                                "가장 가까운 고등학교", "도봉고등학교 · 700m", null,
+                                "1km 이하", 26.7, "카카오 로컬 학교 검색")
+                ),
+                new AiEvaluationRespDto.ScoreCalculation(
+                        "초·중·고 최근접 학교 거리 점수 평균 = 90.0", "NATIONWIDE_SCHOOL_V1")
+        );
+        when(nearbySchoolProvider.evaluate(property.getCoordinate())).thenReturn(Optional.of(schoolResult));
+        when(evaluationReportService.resolve(eq(property), anyList(), anyString(), any(), any(), any()))
+                .thenAnswer(invocation -> new AiEvaluationReportService.Resolution(
+                        invocation.getArgument(4), AiEvaluationReportService.RULE_BASED_MODEL_VERSION,
+                        LocalDateTime.now()));
+
+        AiEvaluationRespDto response = service.getAiEvaluation(1L);
+
+        AiEvaluationRespDto.CategoryScore school = response.categories().stream()
+                .filter(category -> category.key() == AiEvaluationRespDto.CategoryKey.SCHOOL)
+                .findFirst().orElseThrow();
+        assertThat(school.rawScore()).isEqualTo(90.0);
+        assertThat(school.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::value)
+                .containsExactly("도봉초등학교 · 300m", "도봉중학교 · 500m", "도봉고등학교 · 700m");
+        assertThat(school.description()).contains("도봉초등학교", "도봉중학교", "도봉고등학교");
+    }
+
+    @Test
+    void usesDatasetScoresAndEvidenceWithoutCallingKakaoProviders() {
+        var entry = new DobongAiDataset.Entry(property.getAddress(), 2000,
+                75, 70, 90, 60, 30, 80, 400, 1, 2, 3,
+                "역", 500, "정류장", 100, "공원", 300, "병원", 200);
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.of(entry));
+        stubFallbackReport();
+
+        var response = service.getAiEvaluation(1L);
+
+        verifyNoInteractions(nearbySchoolProvider, nearbyInfrastructureProvider);
+        var school = response.categories().get(0);
+        assertThat(school.rawScore()).isEqualTo(75);
+        assertThat(school.description()).contains("400m");
+        assertThat(school.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::source)
+                .containsOnly("도봉구 지리 데이터셋");
+        assertThat(school.calculation().policyVersion()).isEqualTo("DOBONG_GEOSPATIAL_V1");
+        var infrastructure = response.categories().get(5);
+        assertThat(infrastructure.rawScore()).isEqualTo(60);
+        assertThat(infrastructure.description()).contains("병원", "200m");
+        assertThat(infrastructure.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::source)
+                .containsOnly("도봉구 지리 데이터셋");
+    }
+
+    @Test
+    void usesStoredScoresWithoutCallingKakaoProviders() {
+        var stored = mock(PropertyAiEvaluation.class);
+        when(stored.getSchoolScore()).thenReturn(75.0);
+        when(stored.getInfrastructureScore()).thenReturn(65.0);
+        when(stored.getScoreVersion()).thenReturn("STORED_V1");
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(evaluationRepository.findById(1L)).thenReturn(Optional.of(stored));
+        stubFallbackReport();
+
+        var response = service.getAiEvaluation(1L);
+
+        verifyNoInteractions(dobongAiDataset, nearbySchoolProvider, nearbyInfrastructureProvider);
+        var school = response.categories().get(0);
+        assertThat(school.rawScore()).isEqualTo(75);
+        assertThat(school.evidence()).isEmpty();
+        assertThat(school.calculation().policyVersion()).isEqualTo("STORED_V1");
+        var infrastructure = response.categories().get(5);
+        assertThat(infrastructure.rawScore()).isEqualTo(65);
+        assertThat(infrastructure.evidence()).isEmpty();
+        assertThat(infrastructure.calculation().policyVersion()).isEqualTo("STORED_V1");
+    }
+
+    private void stubFallbackReport() {
+        when(evaluationReportService.resolve(eq(property), anyList(), anyString(), any(), any(), any()))
+                .thenAnswer(invocation -> new AiEvaluationReportService.Resolution(
+                        invocation.getArgument(4), AiEvaluationReportService.RULE_BASED_MODEL_VERSION,
+                        invocation.getArgument(5)));
+    }
+
+    private void setAddress(Property target, String address) {
+        try {
+            var field = Property.class.getDeclaredField("address");
+            field.setAccessible(true);
+            field.set(target, address);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     /**
