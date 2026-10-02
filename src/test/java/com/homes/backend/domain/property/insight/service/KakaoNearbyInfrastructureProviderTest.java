@@ -34,6 +34,9 @@ class KakaoNearbyInfrastructureProviderTest {
                         "8곳 · 가까운 곳 한일병원 240m",
                         "2곳 · 가까운 곳 하나로마트 520m",
                         "3곳 · 가까운 곳 도봉문화원 780m");
+        assertThat(result.score()).isEqualTo(69.0);
+        assertThat(result.evidence()).extracting(evidence -> evidence.contribution())
+                .containsExactly(31.3, 20.7, 17.0);
         server.verify();
     }
 

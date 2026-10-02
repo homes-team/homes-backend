@@ -11,6 +11,14 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.aop.framework.ProxyFactory;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -93,6 +101,105 @@ class AiEvaluationReportServiceTest {
         ArgumentCaptor<String> inputCaptor = ArgumentCaptor.forClass(String.class);
         verify(generator).generate(inputCaptor.capture());
         assertThat(inputCaptor.getValue()).contains("evidence", "calculation", "POLICY_TEST_V1");
+    }
+
+    @Test
+    void readsAndSavesInTransactionsButGeneratesOutsideTheCallerTransaction() {
+        var manager = new TestTransactionManager();
+        var target = new AiEvaluationReportService(repository, generator, new ObjectMapper(), manager);
+        var proxyFactory = new ProxyFactory(target);
+        proxyFactory.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));
+        var proxiedService = (AiEvaluationReportService) proxyFactory.getProxy();
+        when(generator.isConfigured()).thenReturn(true);
+        when(generator.modelVersion()).thenReturn("OPENAI_TEST_V1");
+        when(repository.findByPropertyIdAndInputHash(eq(21L), anyString())).thenAnswer(invocation -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+            return Optional.empty();
+        });
+        when(generator.generate(anyString())).thenAnswer(invocation -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            return Optional.of(new AiEvaluationReportGenerator.GeneratedReport("생성됨", List.of(), List.of()));
+        });
+        when(repository.save(any())).thenAnswer(invocation -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+            return invocation.getArgument(0);
+        });
+
+        new TransactionTemplate(manager).executeWithoutResult(status -> {
+            var result = proxiedService.resolve(property, categories.subList(0, 2), "SCORE_V1",
+                    null, fallback, fallbackGeneratedAt);
+            assertThat(result.report().summary()).isEqualTo("생성됨");
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+        });
+        assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+        verify(repository).save(any());
+    }
+
+    @Test
+    void returnsCachedReportWithoutGeneratingOrSaving() {
+        when(generator.isConfigured()).thenReturn(true);
+        when(generator.modelVersion()).thenReturn("OPENAI_TEST_V1");
+        var cached = new PropertyAiReport(21L, "hash", "OPENAI_TEST_V1", "캐시",
+                "[]", "[]", null, fallbackGeneratedAt);
+        when(repository.findByPropertyIdAndInputHash(eq(21L), anyString())).thenReturn(Optional.of(cached));
+
+        var result = service.resolve(property, categories, "SCORE_V1", null, fallback, fallbackGeneratedAt);
+
+        assertThat(result.report().summary()).isEqualTo("캐시");
+        assertThat(result.generatedAt()).isEqualTo(fallbackGeneratedAt);
+        verify(generator, never()).generate(anyString());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void preservesFallbackWhenGenerationReturnsNoResult() {
+        when(generator.isConfigured()).thenReturn(true);
+        when(generator.modelVersion()).thenReturn("OPENAI_TEST_V1");
+        when(generator.generate(anyString())).thenReturn(Optional.empty());
+
+        var result = service.resolve(property, categories, "SCORE_V1", null, fallback, fallbackGeneratedAt);
+
+        assertThat(result.report()).isEqualTo(fallback);
+        assertThat(result.generatedAt()).isEqualTo(fallbackGeneratedAt);
+        assertThat(result.modelVersion()).isEqualTo(AiEvaluationReportService.RULE_BASED_MODEL_VERSION);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void doesNotGenerateWithOnlyOneScoredCategory() {
+        var result = service.resolve(property, categories.subList(0, 1), "SCORE_V1",
+                null, fallback, fallbackGeneratedAt);
+
+        assertThat(result.report()).isEqualTo(fallback);
+        verifyNoInteractions(repository, generator);
+    }
+
+    private static class TestTransactionManager extends AbstractPlatformTransactionManager {
+        private boolean active;
+
+        @Override
+        protected Object doGetTransaction() { return new Object(); }
+
+        @Override
+        protected boolean isExistingTransaction(Object transaction) { return active; }
+
+        @Override
+        protected void doBegin(Object transaction, TransactionDefinition definition) { active = true; }
+
+        @Override
+        protected Object doSuspend(Object transaction) {
+            active = false;
+            return transaction;
+        }
+
+        @Override
+        protected void doResume(Object transaction, Object suspendedResources) { active = true; }
+
+        @Override
+        protected void doCommit(DefaultTransactionStatus status) { active = false; }
+
+        @Override
+        protected void doRollback(DefaultTransactionStatus status) { active = false; }
     }
 
     private AiEvaluationRespDto.CategoryScore category(

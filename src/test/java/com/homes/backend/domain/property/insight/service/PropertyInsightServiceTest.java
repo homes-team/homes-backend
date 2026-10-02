@@ -27,7 +27,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
+import com.homes.backend.domain.property.insight.entity.PropertyAiEvaluation;
 
 @ExtendWith(MockitoExtension.class)
 class PropertyInsightServiceTest {
@@ -198,6 +199,61 @@ class PropertyInsightServiceTest {
         assertThat(school.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::value)
                 .containsExactly("도봉초등학교 · 300m", "도봉중학교 · 500m", "도봉고등학교 · 700m");
         assertThat(school.description()).contains("도봉초등학교", "도봉중학교", "도봉고등학교");
+    }
+
+    @Test
+    void usesDatasetScoresAndEvidenceWithoutCallingKakaoProviders() {
+        var entry = new DobongAiDataset.Entry(property.getAddress(), 2000,
+                75, 70, 90, 60, 30, 80, 400, 1, 2, 3,
+                "역", 500, "정류장", 100, "공원", 300, "병원", 200);
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.of(entry));
+        stubFallbackReport();
+
+        var response = service.getAiEvaluation(1L);
+
+        verifyNoInteractions(nearbySchoolProvider, nearbyInfrastructureProvider);
+        var school = response.categories().get(0);
+        assertThat(school.rawScore()).isEqualTo(75);
+        assertThat(school.description()).contains("400m");
+        assertThat(school.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::source)
+                .containsOnly("도봉구 지리 데이터셋");
+        assertThat(school.calculation().policyVersion()).isEqualTo("DOBONG_GEOSPATIAL_V1");
+        var infrastructure = response.categories().get(5);
+        assertThat(infrastructure.rawScore()).isEqualTo(60);
+        assertThat(infrastructure.description()).contains("병원", "200m");
+        assertThat(infrastructure.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::source)
+                .containsOnly("도봉구 지리 데이터셋");
+    }
+
+    @Test
+    void usesStoredScoresWithoutCallingKakaoProviders() {
+        var stored = mock(PropertyAiEvaluation.class);
+        when(stored.getSchoolScore()).thenReturn(75.0);
+        when(stored.getInfrastructureScore()).thenReturn(65.0);
+        when(stored.getScoreVersion()).thenReturn("STORED_V1");
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(evaluationRepository.findById(1L)).thenReturn(Optional.of(stored));
+        stubFallbackReport();
+
+        var response = service.getAiEvaluation(1L);
+
+        verifyNoInteractions(dobongAiDataset, nearbySchoolProvider, nearbyInfrastructureProvider);
+        var school = response.categories().get(0);
+        assertThat(school.rawScore()).isEqualTo(75);
+        assertThat(school.evidence()).isEmpty();
+        assertThat(school.calculation().policyVersion()).isEqualTo("STORED_V1");
+        var infrastructure = response.categories().get(5);
+        assertThat(infrastructure.rawScore()).isEqualTo(65);
+        assertThat(infrastructure.evidence()).isEmpty();
+        assertThat(infrastructure.calculation().policyVersion()).isEqualTo("STORED_V1");
+    }
+
+    private void stubFallbackReport() {
+        when(evaluationReportService.resolve(eq(property), anyList(), anyString(), any(), any(), any()))
+                .thenAnswer(invocation -> new AiEvaluationReportService.Resolution(
+                        invocation.getArgument(4), AiEvaluationReportService.RULE_BASED_MODEL_VERSION,
+                        invocation.getArgument(5)));
     }
 
     private void setAddress(Property target, String address) {

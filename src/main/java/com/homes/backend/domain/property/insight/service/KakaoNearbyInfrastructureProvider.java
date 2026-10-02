@@ -84,7 +84,7 @@ public class KakaoNearbyInfrastructureProvider {
                     value,
                     null,
                     "반경 1km",
-                    null,
+                    round1(categoryScore(category) / categories.size()),
                     "카카오 로컬 장소 검색"
             );
         }).toList();

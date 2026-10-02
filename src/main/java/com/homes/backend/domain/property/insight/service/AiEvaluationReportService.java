@@ -11,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
@@ -47,6 +49,7 @@ public class AiEvaluationReportService {
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Resolution resolve(
             Property property,
             List<CategoryScore> categories,
@@ -73,8 +76,15 @@ public class AiEvaluationReportService {
         ReentrantLock lock = propertyLocks.computeIfAbsent(property.getId(), ignored -> new ReentrantLock());
         lock.lock();
         try {
-            Resolution resolution = transactionTemplate.execute(status ->
-                    resolveInTransaction(property.getId(), inputHash, inputJson, notice));
+            Resolution cached = transactionTemplate.execute(status ->
+                    reportRepository.findByPropertyIdAndInputHash(property.getId(), inputHash)
+                            .map(this::toResolution).orElse(null));
+            if (cached != null) return cached;
+
+            Resolution resolution = reportGenerator.generate(inputJson)
+                    .map(generated -> transactionTemplate.execute(status ->
+                            save(property.getId(), inputHash, notice, generated)))
+                    .orElse(null);
             return resolution == null ? fallback(fallback, fallbackGeneratedAt) : resolution;
         } catch (Exception exception) {
             log.warn("AI 매물 리포트 저장에 실패하여 규칙 기반 리포트를 사용합니다", exception);
@@ -83,14 +93,6 @@ public class AiEvaluationReportService {
             lock.unlock();
             propertyLocks.remove(property.getId(), lock);
         }
-    }
-
-    private Resolution resolveInTransaction(Long propertyId, String inputHash, String inputJson, String notice) {
-        return reportRepository.findByPropertyIdAndInputHash(propertyId, inputHash)
-                .map(this::toResolution)
-                .orElseGet(() -> reportGenerator.generate(inputJson)
-                        .map(generated -> save(propertyId, inputHash, notice, generated))
-                        .orElse(null));
     }
 
     private Resolution save(

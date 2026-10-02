@@ -55,10 +55,11 @@ public class PropertyInsightService {
         Optional<DobongAiDataset.Entry> dataset = stored.isEmpty()
                 ? dobongAiDataset.findByAddress(property.getAddress())
                 : Optional.empty();
-        Optional<KakaoNearbySchoolProvider.Result> nearbySchools =
-                nearbySchoolProvider.evaluate(property.getCoordinate());
-        Optional<KakaoNearbyInfrastructureProvider.Result> nearbyInfrastructure =
-                nearbyInfrastructureProvider.evaluate(property.getCoordinate());
+        boolean useNearbyProviders = stored.isEmpty() && dataset.isEmpty();
+        Optional<KakaoNearbySchoolProvider.Result> nearbySchools = useNearbyProviders
+                ? nearbySchoolProvider.evaluate(property.getCoordinate()) : Optional.empty();
+        Optional<KakaoNearbyInfrastructureProvider.Result> nearbyInfrastructure = useNearbyProviders
+                ? nearbyInfrastructureProvider.evaluate(property.getCoordinate()) : Optional.empty();
         Optional<NationwideTransportScoreProvider.Result> nationwideTransport = dataset.isEmpty()
                 ? nationwideTransportScoreProvider.evaluate(property.getCoordinate())
                 : Optional.empty();

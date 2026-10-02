@@ -65,11 +65,10 @@ public class KakaoNearbySchoolProvider {
         }
 
         List<SchoolPlace> schools = new ArrayList<>();
-        findNearest(coordinate, SchoolLevel.ELEMENTARY).ifPresent(schools::add);
-        findNearest(coordinate, SchoolLevel.MIDDLE).ifPresent(schools::add);
-        findNearest(coordinate, SchoolLevel.HIGH).ifPresent(schools::add);
-        if (schools.isEmpty()) {
-            return Optional.empty();
+        for (SchoolLevel level : SchoolLevel.values()) {
+            Optional<SchoolPlace> school = findNearest(coordinate, level);
+            if (school.isEmpty()) return Optional.empty();
+            schools.add(school.get());
         }
 
         double score = round1(schools.stream()
@@ -80,7 +79,8 @@ public class KakaoNearbySchoolProvider {
                 .map(school -> new ScoreEvidence(
                         "NEAREST_" + school.level().name() + "_SCHOOL",
                         "가장 가까운 " + school.level().label(),
-                        school.name() + " · " + Math.round(school.distanceMeters()) + "m",
+                        school.name() == null ? "20km 내 검색 결과 없음"
+                                : school.name() + " · " + Math.round(school.distanceMeters()) + "m",
                         null,
                         distanceCriterion(school.distanceMeters()),
                         round1(distanceScore(school.distanceMeters()) / schools.size()),
@@ -97,8 +97,9 @@ public class KakaoNearbySchoolProvider {
                 "카카오 로컬 학교 검색"
         )));
         String description = schools.stream()
-                .map(school -> school.level().shortLabel() + " " + school.name()
-                        + "(약 " + Math.round(school.distanceMeters()) + "m)")
+                .map(school -> school.level().shortLabel() + " " + (school.name() == null
+                        ? "20km 내 검색 결과 없음"
+                        : school.name() + "(약 " + Math.round(school.distanceMeters()) + "m)"))
                 .reduce((left, right) -> left + ", " + right)
                 .orElse("");
         ScoreCalculation calculation = new ScoreCalculation(
@@ -157,10 +158,12 @@ public class KakaoNearbySchoolProvider {
                 if (!document.path("category_name").asText().contains(level.categoryMarker())) continue;
                 String name = document.path("place_name").asText();
                 double distance = document.path("distance").asDouble(Double.NaN);
-                if (StringUtils.hasText(name) && Double.isFinite(distance)) {
+                if (StringUtils.hasText(name) && Double.isFinite(distance) && distance >= 0) {
                     return Optional.of(new SchoolPlace(level, name, distance));
                 }
+                return Optional.empty();
             }
+            return Optional.of(new SchoolPlace(level, null, Double.NaN));
         } catch (Exception exception) {
             log.warn("카카오 최근접 학교 조회 실패: level={}, longitude={}, latitude={}",
                     level, coordinate.getX(), coordinate.getY(), exception);
@@ -173,6 +176,7 @@ public class KakaoNearbySchoolProvider {
     }
 
     private double distanceScore(double distanceMeters) {
+        if (!Double.isFinite(distanceMeters)) return 0.0;
         if (distanceMeters <= 500) return 100.0;
         if (distanceMeters <= 1_000) return 80.0;
         if (distanceMeters <= 2_000) return 60.0;
@@ -181,6 +185,7 @@ public class KakaoNearbySchoolProvider {
     }
 
     private String distanceCriterion(double distanceMeters) {
+        if (!Double.isFinite(distanceMeters)) return "20km 내 검색 결과 없음: 0점";
         if (distanceMeters <= 500) return "500m 이하";
         if (distanceMeters <= 1_000) return "1km 이하";
         if (distanceMeters <= 2_000) return "2km 이하";
