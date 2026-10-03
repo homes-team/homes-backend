@@ -62,8 +62,12 @@ public class PropertyPricePredictionService {
 
         Integer buildingYear = buildingInformation.map(PropertyBuildingInformation::getBuildingYear).orElse(null);
         String apartmentName = resolvedAddress.map(ResolvedAddress::buildingName).orElse(null);
+        String normalizedAddress = resolvedAddress.map(ResolvedAddress::normalizedAddress).orElse(property.getAddress());
+        String legalDongName = legalDongName(normalizedAddress);
+        String lotNumber = resolvedAddress.map(PropertyPricePredictionService::lotNumber)
+                .orElseGet(() -> buildingInformation.map(PropertyPricePredictionService::lotNumber).orElse(null));
         PricePredictionTarget target = new PricePredictionTarget(
-                property.getArea(), property.getCurrentFloor(), buildingYear, apartmentName);
+                property.getArea(), property.getCurrentFloor(), buildingYear, apartmentName, legalDongName, lotNumber);
 
         LocalDate today = LocalDate.now();
         YearMonth currentMonth = YearMonth.from(today);
@@ -90,5 +94,37 @@ public class PropertyPricePredictionService {
 
     private static PropertyPricePredictionRespDto response(Property property, PricePrediction prediction) {
         return PropertyPricePredictionRespDto.from(property.getId(), property.getTradeType(), prediction);
+    }
+
+    private static String legalDongName(String address) {
+        if (!StringUtils.hasText(address)) return null;
+        for (String token : address.split("\\s+")) {
+            if (token.endsWith("동") || token.endsWith("읍") || token.endsWith("면")
+                    || token.endsWith("리") || token.matches(".*\\d가$")) {
+                return token;
+            }
+        }
+        return null;
+    }
+
+    private static String lotNumber(ResolvedAddress address) {
+        return lotNumber(address.landTypeCode(), address.mainLotNumber(), address.subLotNumber());
+    }
+
+    private static String lotNumber(PropertyBuildingInformation information) {
+        return lotNumber(information.getLandTypeCode(), information.getMainLotNumber(), information.getSubLotNumber());
+    }
+
+    private static String lotNumber(String landTypeCode, String main, String sub) {
+        if (!StringUtils.hasText(main)) return null;
+        String normalizedMain = stripLeadingZeros(main);
+        String normalizedSub = stripLeadingZeros(sub);
+        String prefix = "1".equals(landTypeCode) ? "산" : "";
+        return prefix + normalizedMain + ("0".equals(normalizedSub) ? "" : "-" + normalizedSub);
+    }
+
+    private static String stripLeadingZeros(String value) {
+        if (!StringUtils.hasText(value)) return "0";
+        return value.replaceFirst("^0+(?!$)", "");
     }
 }

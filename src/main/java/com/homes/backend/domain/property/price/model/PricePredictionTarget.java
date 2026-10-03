@@ -4,6 +4,8 @@ public record PricePredictionTarget(
         double areaSquareMeters,
         int floor,
         Integer buildYear,
-        String apartmentName
+        String apartmentName,
+        String legalDongName,
+        String lotNumber
 ) {
 }
