@@ -134,6 +134,7 @@ public class SecurityConfig {
                                 "/properties",
                                 "/properties/{propertyId}",
                                 "/properties/{propertyId}/ai-evaluation",
+                                "/properties/{propertyId}/price-prediction",
                                 "/properties/{propertyId}/isochrone",
                                 "/properties/{propertyId}/building-information",
                                 "/properties/{propertyId}/realtors",
