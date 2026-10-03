@@ -26,7 +26,7 @@ external-api:
     building-register-url: ${BUILDING_REGISTER_API_URL:https://apis.data.go.kr/1613000/BldRgstHubService}
     apartment-list-url: ${APARTMENT_LIST_API_URL:https://apis.data.go.kr/1613000/AptListService4}
     apartment-basis-url: ${APARTMENT_BASIS_API_URL:https://apis.data.go.kr/1613000/AptBasisInfoServiceV5}
-    apartment-trade-url: ${APARTMENT_TRADE_API_URL:https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev}
+    apartment-trade-url: ${APARTMENT_TRADE_API_URL:https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade}
     connect-timeout-millis: 3000
     read-timeout-millis: 5000
 
