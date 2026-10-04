@@ -52,8 +52,8 @@ public class ReviewService {
         Agent targetAgent = agentRepository.findByUserId(targetUserId)
                 .orElseThrow(() -> new CustomException(RealtorErrorCode.AGENT_NOT_FOUND));
 
-        boolean hasMatchedBefore = bidRepository.existsByAgentIdAndPropertyUserIdAndStatus(
-                targetAgent.getId(), reviewerId, BidStatus.ACCEPTED);
+        boolean hasMatchedBefore = bidRepository.existsByAgentIdAndPropertyUserIdAndStatusIn(
+                targetAgent.getId(), reviewerId, List.of(BidStatus.ACCEPTED, BidStatus.CANCELLED));
         if (!hasMatchedBefore) {
             throw new CustomException(ReviewErrorCode.NOT_MATCHED_WITH_AGENT);
         }
