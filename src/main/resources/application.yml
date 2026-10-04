@@ -1,8 +1,6 @@
 spring:
   application:
     name: homes-backend
-  jpa:
-    open-in-view: false
   profiles:
     active: local # application-local.yml을 실행하겠다는 뜻
     include:
