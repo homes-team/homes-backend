@@ -91,4 +91,12 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
     @Modifying
     @Query("UPDATE Bid b SET b.status = 'REJECTED' WHERE b.property.id = :propertyId AND b.id != :acceptedBidId AND b.status = 'PENDING'")
     void rejectOtherPendingBids(@Param("propertyId") Long propertyId, @Param("acceptedBidId") Long acceptedBidId);
+
+    /**
+     * 리뷰 작성 자격 검증용 - 이 유저(집주인) 소유의 매물에, 이 중개사와 매칭(ACCEPTED)된 적이
+     * 한 번이라도 있는지 확인한다. CANCELLED는 cancelBid()가 ACCEPTED 상태에서만 호출 가능하므로
+     * "한 번은 매칭됐었다가 이후 취소됨"을 의미한다 - 취소됐어도 실제로 상호작용은 있었으므로 리뷰 자격에 포함한다.
+     * 거래완료 여부(Property.status)와는 무관하게, 매칭된 적이 있다는 사실만 확인하면 충분하다고 본다.
+     */
+    boolean existsByAgentIdAndPropertyUserIdAndStatusIn(Long agentId, Long propertyUserId, List<BidStatus> statuses);
 }

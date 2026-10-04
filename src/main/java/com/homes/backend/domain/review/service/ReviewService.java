@@ -1,11 +1,14 @@
 package com.homes.backend.domain.review.service;
 
+import com.homes.backend.domain.bid.entity.BidStatus;
+import com.homes.backend.domain.bid.repository.BidRepository;
 import com.homes.backend.domain.review.dto.request.ReviewCreateReqDto;
 import com.homes.backend.domain.review.dto.response.ReviewListRespDto;
 import com.homes.backend.domain.review.entity.Review;
 import com.homes.backend.domain.review.exception.ReviewErrorCode;
 import com.homes.backend.domain.review.repository.ReviewRepository;
 import com.homes.backend.domain.realtor.entity.Agent;
+import com.homes.backend.domain.realtor.exception.RealtorErrorCode;
 import com.homes.backend.domain.realtor.repository.AgentRepository;
 import com.homes.backend.domain.user.entity.User;
 import com.homes.backend.domain.user.exception.UserErrorCode;
@@ -26,6 +29,7 @@ public class ReviewService {
     private final ReviewRepository reviewRepository;
     private final UserRepository userRepository;
     private final AgentRepository agentRepository;
+    private final BidRepository bidRepository;
 
     /**
      * 특정 대상(중개사 등)에 대한 리뷰 작성
@@ -45,6 +49,15 @@ public class ReviewService {
             throw new CustomException(ReviewErrorCode.ALREADY_REVIEWED);
         }
 
+        Agent targetAgent = agentRepository.findByUserId(targetUserId)
+                .orElseThrow(() -> new CustomException(RealtorErrorCode.AGENT_NOT_FOUND));
+
+        boolean hasMatchedBefore = bidRepository.existsByAgentIdAndPropertyUserIdAndStatusIn(
+                targetAgent.getId(), reviewerId, List.of(BidStatus.ACCEPTED, BidStatus.CANCELLED));
+        if (!hasMatchedBefore) {
+            throw new CustomException(ReviewErrorCode.NOT_MATCHED_WITH_AGENT);
+        }
+
         Review review = Review.builder()
                 .score(request.score())
                 .content(request.content())
@@ -58,9 +71,8 @@ public class ReviewService {
             throw new CustomException(ReviewErrorCode.ALREADY_REVIEWED);
         }
 
-        agentRepository.findByUserId(targetUserId)
-                .ifPresent(agent -> agentRepository.addToReputationScore(
-                        agent.getId(), Agent.calculateReputationDelta(request.score())));
+        agentRepository.addToReputationScore(
+                targetAgent.getId(), Agent.calculateReputationDelta(request.score()));
     }
 
     /**
