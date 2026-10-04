@@ -3,6 +3,7 @@ package com.homes.backend.domain.property.controller;
 import com.homes.backend.domain.property.dto.request.PropertyCreateReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyMapSearchReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyUpdateReqDto;
+import com.homes.backend.domain.property.dto.response.PropertyClusterResDto;
 import com.homes.backend.domain.property.dto.response.PropertyDetailRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyListRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyRealtorInfoResDto;
@@ -131,6 +132,21 @@ public class PropertyController implements PropertyControllerDocs {
         Long userId = (userPrincipal != null) ? userPrincipal.getId() : null;
 
         List<PropertyListRespDto> response = propertyService.searchMapProperties(reqDto, role, userId);
+        return ApiResponse.onSuccess(response);
+    }
+
+    @Override
+    @GetMapping("/clusters")
+    public ApiResponse<List<PropertyClusterResDto>> getPropertyClusters(
+            @RequestParam Double minLat,
+            @RequestParam Double minLon,
+            @RequestParam Double maxLat,
+            @RequestParam Double maxLon,
+            @RequestParam(defaultValue = "14") int zoomLevel
+    ) {
+        List<PropertyClusterResDto> response = propertyService.getPropertyClusters(
+                minLat, minLon, maxLat, maxLon, zoomLevel
+        );
         return ApiResponse.onSuccess(response);
     }
 

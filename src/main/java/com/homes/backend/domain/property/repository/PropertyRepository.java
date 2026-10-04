@@ -1,5 +1,6 @@
 package com.homes.backend.domain.property.repository;
 
+import com.homes.backend.domain.property.dto.response.PropertyClusterResDto;
 import com.homes.backend.domain.property.entity.Property;
 import com.homes.backend.domain.property.entity.PropertyStatus;
 import jakarta.persistence.LockModeType;
@@ -159,4 +160,24 @@ public interface PropertyRepository extends JpaRepository<Property, Long>, Prope
      */
     @Query(value = "SELECT ST_DistanceSphere(coordinate, :realtorLocation) FROM properties WHERE id = :propertyId", nativeQuery = true)
     Double calculateDistanceToProperty(@Param("propertyId") Long propertyId, @Param("realtorLocation") Point realtorLocation);
+
+    /**
+     * 지도 매물 클러스터링
+     */
+    @Query(value = "SELECT " +
+            "ST_Y(ST_Centroid(ST_Collect(coordinate))) AS lat, " +
+            "ST_X(ST_Centroid(ST_Collect(coordinate))) AS lon, " +
+            "COUNT(*) AS count " +
+            "FROM properties " +
+            "WHERE coordinate && ST_MakeEnvelope(:minLon, :minLat, :maxLon, :maxLat, 4326) " +
+            "AND status != 'DELETED' " +
+            "GROUP BY ST_SnapToGrid(coordinate, :gridSize)",
+            nativeQuery = true)
+    List<PropertyClusterResDto.ClusterProjection> findClustersInBoundingBox(
+            @Param("minLon") Double minLon,
+            @Param("minLat") Double minLat,
+            @Param("maxLon") Double maxLon,
+            @Param("maxLat") Double maxLat,
+            @Param("gridSize") Double gridSize
+    );
 }
