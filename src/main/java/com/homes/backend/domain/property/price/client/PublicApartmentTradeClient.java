@@ -3,9 +3,13 @@ package com.homes.backend.domain.property.price.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Ticker;
 import com.homes.backend.domain.property.building.config.PublicDataApiProperties;
 import com.homes.backend.domain.property.price.model.ApartmentTrade;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -22,8 +26,6 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
@@ -35,9 +37,19 @@ public class PublicApartmentTradeClient implements ApartmentTradeProvider {
     private final ObjectMapper objectMapper;
     private final XmlMapper xmlMapper;
     private final RestTemplate restTemplate;
-    private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
+    private final Cache<String, List<ApartmentTrade>> cache;
 
+    @Autowired
     public PublicApartmentTradeClient(PublicDataApiProperties properties, ObjectMapper objectMapper) {
+        this(properties, objectMapper, Ticker.systemTicker());
+    }
+
+    PublicApartmentTradeClient(PublicDataApiProperties properties, ObjectMapper objectMapper, Ticker ticker) {
+        this.cache = Caffeine.newBuilder()
+                .expireAfterWrite(CACHE_TTL)
+                .maximumSize(1000)
+                .ticker(ticker)
+                .build();
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.xmlMapper = new XmlMapper();
@@ -53,9 +65,9 @@ public class PublicApartmentTradeClient implements ApartmentTradeProvider {
             throw new ApartmentTradeProviderException("공공데이터 서비스 키가 설정되지 않았습니다.");
         }
         String cacheKey = sigunguCode + ":" + contractMonth;
-        CacheEntry cached = cache.get(cacheKey);
-        if (cached != null && !cached.isExpired()) {
-            return cached.trades();
+        List<ApartmentTrade> cached = cache.getIfPresent(cacheKey);
+        if (cached != null) {
+            return cached;
         }
 
         try {
@@ -69,7 +81,7 @@ public class PublicApartmentTradeClient implements ApartmentTradeProvider {
                     .build().toUri();
             String body = restTemplate.getForObject(uri, String.class);
             List<ApartmentTrade> trades = parse(body);
-            cache.put(cacheKey, new CacheEntry(List.copyOf(trades), System.currentTimeMillis()));
+            cache.put(cacheKey, List.copyOf(trades));
             return trades;
         } catch (ApartmentTradeProviderException exception) {
             throw exception;
@@ -146,11 +158,5 @@ public class PublicApartmentTradeClient implements ApartmentTradeProvider {
     private String serviceKey() {
         String key = properties.getServiceKey();
         return key.contains("%") ? URLDecoder.decode(key, StandardCharsets.UTF_8) : key;
-    }
-
-    private record CacheEntry(List<ApartmentTrade> trades, long storedAtMillis) {
-        boolean isExpired() {
-            return System.currentTimeMillis() - storedAtMillis > CACHE_TTL.toMillis();
-        }
     }
 }

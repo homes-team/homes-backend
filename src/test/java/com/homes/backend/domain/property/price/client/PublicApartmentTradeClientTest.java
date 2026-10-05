@@ -4,6 +4,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.homes.backend.domain.property.building.config.PublicDataApiProperties;
 import com.homes.backend.domain.property.price.model.ApartmentTrade;
 import org.junit.jupiter.api.Test;
+import com.github.benmanes.caffeine.cache.Cache;
+import org.springframework.http.MediaType;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestTemplate;
+import java.time.Duration;
+import java.time.YearMonth;
+import java.util.concurrent.atomic.AtomicLong;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.anything;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -13,6 +23,44 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PublicApartmentTradeClientTest {
     private final PublicApartmentTradeClient client =
             new PublicApartmentTradeClient(new PublicDataApiProperties(), new ObjectMapper());
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void evictsExpiredTradesAndFetchesThemAgainWithoutExtendingTtlOnReads() {
+        AtomicLong nanos = new AtomicLong();
+        PublicDataApiProperties properties = new PublicDataApiProperties();
+        properties.setServiceKey("test-key");
+        PublicApartmentTradeClient cachedClient = new PublicApartmentTradeClient(properties, new ObjectMapper(), nanos::get);
+        RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(cachedClient, "restTemplate");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        String body = "{\"response\":{\"body\":{\"items\":\"\"}}}";
+        server.expect(anything()).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+        server.expect(anything()).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+        YearMonth month = YearMonth.of(2026, 9);
+        cachedClient.findMonthlyTrades("11680", month);
+        nanos.set(Duration.ofHours(23).toNanos());
+        cachedClient.findMonthlyTrades("11680", month);
+
+        Cache<String, List<ApartmentTrade>> cache =
+                (Cache<String, List<ApartmentTrade>>) ReflectionTestUtils.getField(cachedClient, "cache");
+        nanos.set(Duration.ofHours(24).toNanos());
+        cache.cleanUp();
+        assertThat(cache.estimatedSize()).isZero();
+        cachedClient.findMonthlyTrades("11680", month);
+        server.verify();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void evictsExcessDistrictMonthKeys() {
+        Cache<String, List<ApartmentTrade>> cache =
+                (Cache<String, List<ApartmentTrade>>) ReflectionTestUtils.getField(client, "cache");
+        for (int i = 0; i < 1100; i++) {
+            cache.put("district:" + i, List.of());
+        }
+        cache.cleanUp();
+        assertThat(cache.estimatedSize()).isEqualTo(1000);
+    }
 
     @Test
     void parsesCurrentPublicDataJsonFields() throws Exception {

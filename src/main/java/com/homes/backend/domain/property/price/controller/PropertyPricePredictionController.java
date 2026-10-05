@@ -3,6 +3,7 @@ package com.homes.backend.domain.property.price.controller;
 import com.homes.backend.domain.property.price.dto.PropertyPricePredictionRespDto;
 import com.homes.backend.domain.property.price.service.PropertyPricePredictionService;
 import com.homes.backend.global.response.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,7 +18,7 @@ public class PropertyPricePredictionController implements PropertyPricePredictio
 
     @Override
     @GetMapping("/{propertyId}/price-prediction")
-    public ApiResponse<PropertyPricePredictionRespDto> predict(@PathVariable Long propertyId) {
-        return ApiResponse.onSuccess(predictionService.predict(propertyId));
+    public ApiResponse<PropertyPricePredictionRespDto> predict(@PathVariable Long propertyId, HttpServletRequest request) {
+        return ApiResponse.onSuccess(predictionService.predict(propertyId, request.getRemoteAddr()));
     }
 }

@@ -16,10 +16,14 @@ import com.homes.backend.domain.property.price.model.PricePredictionStatus;
 import com.homes.backend.domain.property.price.model.PricePredictionTarget;
 import com.homes.backend.domain.property.repository.PropertyRepository;
 import com.homes.backend.global.exception.CustomException;
+import com.homes.backend.global.exception.GlobalErrorCode;
 import com.homes.backend.global.geocoding.GeocodingService;
 import com.homes.backend.global.geocoding.ResolvedAddress;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -34,14 +38,32 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class PropertyPricePredictionService {
     private static final int LOOKBACK_MONTHS = 18;
+    // Share the request budget across all property IDs and application instances.
+    private static final int RATE_LIMIT_MAX_REQUESTS = 30;
+    private static final RedisScript<Long> RATE_LIMIT_SCRIPT = new DefaultRedisScript<>("""
+            local count = redis.call('INCR', KEYS[1])
+            if count == 1 then
+                redis.call('EXPIRE', KEYS[1], 60)
+            end
+            return count
+            """, Long.class);
 
     private final PropertyRepository propertyRepository;
     private final PropertyBuildingInformationRepository buildingInformationRepository;
     private final GeocodingService geocodingService;
     private final ApartmentTradeProvider apartmentTradeProvider;
     private final PricePredictionPolicy predictionPolicy;
+    private final StringRedisTemplate redisTemplate;
 
-    public PropertyPricePredictionRespDto predict(Long propertyId) {
+    public PropertyPricePredictionRespDto predict(Long propertyId, String clientIp) {
+        Long requestCount = redisTemplate.execute(RATE_LIMIT_SCRIPT, List.of("PRICE_PREDICTION_RATE:" + clientIp));
+        if (requestCount == null) {
+            throw new CustomException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
+        }
+        if (requestCount > RATE_LIMIT_MAX_REQUESTS) {
+            throw new CustomException(GlobalErrorCode.TOO_MANY_REQUESTS);
+        }
+
         Property property = propertyRepository.findById(propertyId)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
         if (property.getPropertyType() != PropertyType.APARTMENT || property.getTradeType() != TradeType.SALE) {
