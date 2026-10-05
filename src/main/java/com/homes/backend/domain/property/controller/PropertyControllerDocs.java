@@ -3,6 +3,7 @@ package com.homes.backend.domain.property.controller;
 import com.homes.backend.domain.property.dto.request.PropertyCreateReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyMapSearchReqDto;
 import com.homes.backend.domain.property.dto.request.PropertyUpdateReqDto;
+import com.homes.backend.domain.property.dto.response.PropertyClusterResDto;
 import com.homes.backend.domain.property.dto.response.PropertyDetailRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyListRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyRealtorInfoResDto;
@@ -65,6 +66,16 @@ public interface PropertyControllerDocs {
     ApiResponse<List<PropertyListRespDto>> searchMapProperties(
             @Valid @ParameterObject @ModelAttribute PropertyMapSearchReqDto reqDto,
             @Parameter(hidden=true) @AuthenticationPrincipal UserPrincipal userPrincipal
+    );
+
+    @Operation(summary = "줌 레벨별 매물 클러스터링 조회", description = """
+            지도의 보이는 영역과 줌 레벨을 기반으로 매물을 그룹화(클러스터링)하여 중심 좌표, 매물 개수를 반환합니다.""")
+    ApiResponse<List<PropertyClusterResDto>> getPropertyClusters(
+            @Parameter(description = "남서쪽 위도 (최소 위도)", example = "37.492") Double minLat,
+            @Parameter(description = "남서쪽 경도 (최소 경도)", example = "126.957") Double minLon,
+            @Parameter(description = "북동쪽 위도 (최대 위도)", example = "37.512") Double maxLat,
+            @Parameter(description = "북동쪽 경도 (최대 경도)", example = "127.057") Double maxLon,
+            @Parameter(description = "카카오맵 줌 레벨 (1:가장 확대/가까움 ~ 14:가장 축소/멂)", example = "5") int zoomLevel
     );
 
     @Operation(summary = "매물 랭킹 조회", description = "최근 가장 조회수와 찜 개수가 높은 상위 10개의 매물 리스트를 실시간으로 조회합니다.")

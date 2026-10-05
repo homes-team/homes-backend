@@ -140,6 +140,7 @@ public class SecurityConfig {
                                 "/properties/{propertyId}/reports",
                                 "/properties/{propertyId}/registry-risk",
                                 "/properties/map",
+                                "/properties/clusters",
                                 "/properties/surge-rankings",
                                 "/properties/*/verifications",
                                 "/properties/infrastructure",

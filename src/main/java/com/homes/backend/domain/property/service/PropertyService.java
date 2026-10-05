@@ -1,13 +1,14 @@
 package com.homes.backend.domain.property.service;
 
-import com.homes.backend.domain.property.dto.request.PropertyCreateReqDto;
-import com.homes.backend.domain.property.dto.request.PropertyMapSearchReqDto;
-import com.homes.backend.domain.property.dto.request.PropertyUpdateReqDto;
-import com.homes.backend.domain.property.building.event.BuildingInformationCollectionRequestedEvent;
-import com.homes.backend.domain.property.building.repository.PropertyBuildingInformationRepository;
 import com.homes.backend.domain.bid.entity.Bid;
 import com.homes.backend.domain.bid.entity.BidStatus;
 import com.homes.backend.domain.bid.repository.BidRepository;
+import com.homes.backend.domain.property.building.event.BuildingInformationCollectionRequestedEvent;
+import com.homes.backend.domain.property.building.repository.PropertyBuildingInformationRepository;
+import com.homes.backend.domain.property.dto.request.PropertyCreateReqDto;
+import com.homes.backend.domain.property.dto.request.PropertyMapSearchReqDto;
+import com.homes.backend.domain.property.dto.request.PropertyUpdateReqDto;
+import com.homes.backend.domain.property.dto.response.PropertyClusterResDto;
 import com.homes.backend.domain.property.dto.response.PropertyDetailRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyListRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyRealtorInfoResDto;
@@ -437,6 +438,50 @@ public class PropertyService {
 
         return favorites.stream()
                 .map(favorite -> PropertyListRespDto.from(favorite.getProperty()))
+                .toList();
+    }
+
+    /**
+     * 지도 매물 클러스터링
+     */
+    @Transactional(readOnly = true)
+    public List<PropertyClusterResDto> getPropertyClusters(
+            Double minLat, Double minLon, Double maxLat, Double maxLon, int zoomLevel) {
+
+        double gridSize;
+
+        // 카카오맵 줌 레벨: 1(가장 확대/가까움) ~ 14(가장 축소/멂)
+        if (zoomLevel >= 11) {
+            // Level 11 ~ 14: 전국/시도 단위 (매우 멀리서 볼 때) -> 아주 크게 묶음 (약 5km 반경)
+            gridSize = 0.05;
+        } else if (zoomLevel >= 8) {
+            // Level 8 ~ 10: 구/시 단위 -> 중간 크기로 묶음 (약 2km 반경)
+            gridSize = 0.02;
+        } else if (zoomLevel >= 5) {
+            // Level 5 ~ 7: 동 단위 -> 작게 묶음 (약 500m 반경)
+            gridSize = 0.005;
+        } else {
+            // Level 1 ~ 4: 단지/골목 단위 (가장 가까움) -> 클러스터링을 최소화하여 거의 낱개로 보여줌
+            gridSize = 0.0005;
+        }
+
+        // 악의적/비정상적 요청 방어를 위한 Bounding Box 크기 검증 로직
+        double latDiff = maxLat - minLat;
+        double lonDiff = maxLon - minLon;
+        double maxDiff = Math.max(latDiff, lonDiff);
+
+        // 요청된 영역이 너무 넓은데 격자가 지나치게 작게 설정된 경우, DB 과부하 방지를 위해 강제로 격자를 키움
+        if (maxDiff > 0.5) { // 약 50km 이상 (시/도 단위)
+            gridSize = Math.max(gridSize, 0.05);
+        } else if (maxDiff > 0.1) { // 약 10km 이상 (구 단위)
+            gridSize = Math.max(gridSize, 0.02);
+        } else if (maxDiff > 0.02) { // 약 2km 이상 (동 단위)
+            gridSize = Math.max(gridSize, 0.005);
+        }
+
+        return propertyRepository.findClustersInBoundingBox(minLon, minLat, maxLon, maxLat, gridSize)
+                .stream()
+                .map(PropertyClusterResDto::from)
                 .toList();
     }
 }
