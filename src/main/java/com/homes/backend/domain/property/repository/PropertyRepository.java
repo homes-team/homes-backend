@@ -167,10 +167,12 @@ public interface PropertyRepository extends JpaRepository<Property, Long>, Prope
     @Query(value = "SELECT " +
             "ST_Y(ST_Centroid(ST_Collect(coordinate))) AS lat, " +
             "ST_X(ST_Centroid(ST_Collect(coordinate))) AS lon, " +
-            "COUNT(*) AS count " +
+            "COUNT(*) AS count, " +
+            "AVG(deposit) AS avgDeposit " +
             "FROM properties " +
             "WHERE coordinate && ST_MakeEnvelope(:minLon, :minLat, :maxLon, :maxLat, 4326) " +
-            "AND status != 'DELETED' " +
+            // DELETED 제외가 아니라, 실제 노출되어야 할 상태만 명시적으로 포함
+            "AND status IN ('AVAILABLE', 'MATCHED') " +
             "GROUP BY ST_SnapToGrid(coordinate, :gridSize)",
             nativeQuery = true)
     List<PropertyClusterResDto.ClusterProjection> findClustersInBoundingBox(

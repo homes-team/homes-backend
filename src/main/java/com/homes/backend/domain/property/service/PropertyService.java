@@ -465,6 +465,20 @@ public class PropertyService {
             gridSize = 0.0005;
         }
 
+        // 악의적/비정상적 요청 방어를 위한 Bounding Box 크기 검증 로직
+        double latDiff = maxLat - minLat;
+        double lonDiff = maxLon - minLon;
+        double maxDiff = Math.max(latDiff, lonDiff);
+
+        // 요청된 영역이 너무 넓은데 격자가 지나치게 작게 설정된 경우, DB 과부하 방지를 위해 강제로 격자를 키움
+        if (maxDiff > 0.5) { // 약 50km 이상 (시/도 단위)
+            gridSize = Math.max(gridSize, 0.05);
+        } else if (maxDiff > 0.1) { // 약 10km 이상 (구 단위)
+            gridSize = Math.max(gridSize, 0.02);
+        } else if (maxDiff > 0.02) { // 약 2km 이상 (동 단위)
+            gridSize = Math.max(gridSize, 0.005);
+        }
+
         return propertyRepository.findClustersInBoundingBox(minLon, minLat, maxLon, maxLat, gridSize)
                 .stream()
                 .map(PropertyClusterResDto::from)
