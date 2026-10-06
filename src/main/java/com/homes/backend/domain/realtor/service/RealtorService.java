@@ -1,8 +1,12 @@
 package com.homes.backend.domain.realtor.service;
 
+import com.homes.backend.domain.bid.dto.response.MyBidListRespDto;
+import com.homes.backend.domain.bid.entity.Bid;
 import com.homes.backend.domain.bid.entity.BidStatus;
+import com.homes.backend.domain.bid.entity.Negotiation;
 import com.homes.backend.domain.bid.repository.AgentFeeByPropertyTypeProjection;
 import com.homes.backend.domain.bid.repository.BidRepository;
+import com.homes.backend.domain.bid.repository.NegotiationRepository;
 import com.homes.backend.domain.property.entity.PropertyStatus;
 import com.homes.backend.domain.property.repository.PropertyDistanceProjection;
 import com.homes.backend.domain.property.repository.PropertyRepository;
@@ -34,7 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -47,6 +53,7 @@ public class RealtorService {
     private final AgentRepository agentRepository;
     private final PropertyRepository propertyRepository;
     private final BidRepository bidRepository;
+    private final NegotiationRepository negotiationRepository;
     private final ReviewRepository reviewRepository;
     private final PasswordEncoder passwordEncoder;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -185,6 +192,32 @@ public class RealtorService {
 
         return biddableProperties.stream()
                 .map(NearbyPropertyResDto::from)
+                .toList();
+    }
+
+    /**
+     * 중개사 마이페이지 - 본인이 보낸 입찰 제안서 목록 (전체 이력, 최신순)
+     * 제안서(Bid) 1건당 1행으로 보여주되, 역제안으로 가격을 낮춰 다시 보낸 경우에는
+     * 최신 역제안 금액을 currentFee에 반영한다 (acceptBid의 최종 수수료 계산 로직과 동일한 우선순위).
+     */
+    public List<MyBidListRespDto> getMyBids(Long userId) {
+        Agent agent = agentRepository.findByUserId(userId)
+                .orElseThrow(() -> new CustomException(RealtorErrorCode.AGENT_NOT_FOUND));
+
+        List<Bid> bids = bidRepository.findAllByAgentIdOrderByCreatedAtDesc(agent.getId());
+        if (bids.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> bidIds = bids.stream().map(Bid::getId).toList();
+        Map<Long, Double> latestFeeByBidId = negotiationRepository.findAllByBidIdInOrderByCreatedAtDesc(bidIds).stream()
+                .collect(Collectors.toMap(
+                        n -> n.getBid().getId(),
+                        Negotiation::getSuggestedFee,
+                        (latest, older) -> latest));
+
+        return bids.stream()
+                .map(bid -> MyBidListRespDto.of(bid, latestFeeByBidId.getOrDefault(bid.getId(), bid.getProposedFee())))
                 .toList();
     }
 

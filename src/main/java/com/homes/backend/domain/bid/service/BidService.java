@@ -70,6 +70,10 @@ public class BidService {
                 .build();
 
         bidRepository.save(bid);
+
+        // 새 입찰 제안서가 도착했음을 집주인에게 알림
+        notificationService.createNotification(
+                property.getUser().getId(), NotificationType.BID, "새로운 입찰 제안서가 도착했습니다.", propertyId);
     }
 
     /**

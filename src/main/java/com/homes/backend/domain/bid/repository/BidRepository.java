@@ -99,4 +99,10 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
      * 거래완료 여부(Property.status)와는 무관하게, 매칭된 적이 있다는 사실만 확인하면 충분하다고 본다.
      */
     boolean existsByAgentIdAndPropertyUserIdAndStatusIn(Long agentId, Long propertyUserId, List<BidStatus> statuses);
+
+    /**
+     * 중개사 마이페이지 - 본인이 보낸 입찰 제안서 목록 (전체 이력, 최신순)
+     */
+    @EntityGraph(attributePaths = {"property"})
+    List<Bid> findAllByAgentIdOrderByCreatedAtDesc(Long agentId);
 }
