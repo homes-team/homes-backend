@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PropertyRepository extends JpaRepository<Property, Long>, PropertyRepositoryCustom {
+    boolean existsByUserIdAndAddressAndDetailAddress(Long userId, String address, String detailAddress);
+
     /**
      * 내가 등록한 매물 목록. 삭제(DELETED)된 매물은 자연히 제외
      */

@@ -28,6 +28,13 @@ external-api:
     connect-timeout-millis: 3000
     read-timeout-millis: 5000
 
+app:
+  seed:
+    properties:
+      enabled: ${PROPERTY_SEED_ENABLED:false}
+      owner-email: ${PROPERTY_SEED_OWNER_EMAIL:}
+      image-base-url: ${PROPERTY_SEED_IMAGE_BASE_URL:http://localhost:8080/seed-images}
+
 kakao:
   rest-api-key: ${KAKAO_REST_API_KEY:}
 
