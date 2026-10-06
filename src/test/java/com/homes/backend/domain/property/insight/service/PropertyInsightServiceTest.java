@@ -36,6 +36,7 @@ class PropertyInsightServiceTest {
     @Mock PropertyAiEvaluationRepository evaluationRepository;
     @Mock DobongAiDataset dobongAiDataset;
     @Mock KakaoNearbySchoolProvider nearbySchoolProvider;
+    @Mock KakaoNearbyNatureProvider nearbyNatureProvider;
     @Mock KakaoNearbyInfrastructureProvider nearbyInfrastructureProvider;
     @Mock NationwideTransportScoreProvider nationwideTransportScoreProvider;
     @Mock PropertyBuildingInformationRepository buildingInformationRepository;
@@ -50,7 +51,7 @@ class PropertyInsightServiceTest {
     @BeforeEach
     void setUp() {
         service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset,
-                nearbySchoolProvider, nearbyInfrastructureProvider, nationwideTransportScoreProvider,
+                nearbySchoolProvider, nearbyNatureProvider, nearbyInfrastructureProvider, nationwideTransportScoreProvider,
                 buildingInformationRepository,
                 new PropertyEvaluationScorePolicy(), evaluationReportService);
         Point point = new GeometryFactory().createPoint(new Coordinate(127.0471, 37.6688));
@@ -157,7 +158,43 @@ class PropertyInsightServiceTest {
         assertThat(transport.source()).isEqualTo(AiEvaluationRespDto.ScoreSource.GEOSPATIAL_PIPELINE);
         assertThat(transport.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::source)
                 .containsExactly("전국 교통 POI");
-        assertThat(response.scoreVersion()).isEqualTo("NATIONWIDE_EXPLAINABLE_V3");
+        assertThat(response.scoreVersion()).isEqualTo("NATIONWIDE_EXPLAINABLE_V4");
+    }
+
+    @Test
+    void evaluatesNatureNationwideFromNearbyParks() {
+        setAddress(property, "서울특별시 강남구 대치동 316");
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(evaluationRepository.findById(1L)).thenReturn(Optional.empty());
+        when(dobongAiDataset.findByAddress(property.getAddress())).thenReturn(Optional.empty());
+        when(buildingInformationRepository.findById(1L)).thenReturn(Optional.empty());
+        var natureResult = new KakaoNearbyNatureProvider.Result(
+                80.5,
+                "가장 가까운 공원은 대치유수지체육공원이며 약 350m 거리입니다. 반경 2km 내 공원은 7곳입니다.",
+                List.of(
+                        new AiEvaluationRespDto.ScoreEvidence("NEAREST_PARK_DISTANCE", "가장 가까운 공원",
+                                "대치유수지체육공원 · 350m", null, "700m 이하", 59.5, "카카오 로컬 공원 검색"),
+                        new AiEvaluationRespDto.ScoreEvidence("PARK_COUNT_WITHIN_2KM", "2km 내 공원",
+                                "7곳", null, "공원 밀도", 21.0, "카카오 로컬 공원 검색")
+                ),
+                new AiEvaluationRespDto.ScoreCalculation(
+                        "최근접 공원 거리 점수×70% + 2km 내 공원 수 점수×30% = 80.5",
+                        "NATIONWIDE_NATURE_V1")
+        );
+        when(nearbyNatureProvider.evaluate(property.getCoordinate())).thenReturn(Optional.of(natureResult));
+        stubFallbackReport();
+
+        AiEvaluationRespDto response = service.getAiEvaluation(1L);
+
+        AiEvaluationRespDto.CategoryScore nature = response.categories().stream()
+                .filter(category -> category.key() == AiEvaluationRespDto.CategoryKey.NATURE)
+                .findFirst().orElseThrow();
+        assertThat(nature.rawScore()).isEqualTo(80.5);
+        assertThat(nature.status()).isEqualTo(AiEvaluationRespDto.ScoreStatus.AVAILABLE);
+        assertThat(nature.description()).contains("대치유수지체육공원", "7곳");
+        assertThat(nature.evidence()).extracting(AiEvaluationRespDto.ScoreEvidence::source)
+                .containsOnly("카카오 로컬 공원 검색");
+        assertThat(nature.calculation().policyVersion()).isEqualTo("NATIONWIDE_NATURE_V1");
     }
 
     @Test
@@ -212,7 +249,7 @@ class PropertyInsightServiceTest {
 
         var response = service.getAiEvaluation(1L);
 
-        verifyNoInteractions(nearbySchoolProvider, nearbyInfrastructureProvider);
+        verifyNoInteractions(nearbySchoolProvider, nearbyNatureProvider, nearbyInfrastructureProvider);
         var school = response.categories().get(0);
         assertThat(school.rawScore()).isEqualTo(75);
         assertThat(school.description()).contains("400m");
@@ -230,6 +267,7 @@ class PropertyInsightServiceTest {
     void usesStoredScoresWithoutCallingKakaoProviders() {
         var stored = mock(PropertyAiEvaluation.class);
         when(stored.getSchoolScore()).thenReturn(75.0);
+        when(stored.getNatureScore()).thenReturn(55.0);
         when(stored.getInfrastructureScore()).thenReturn(65.0);
         when(stored.getScoreVersion()).thenReturn("STORED_V1");
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
@@ -238,7 +276,7 @@ class PropertyInsightServiceTest {
 
         var response = service.getAiEvaluation(1L);
 
-        verifyNoInteractions(dobongAiDataset, nearbySchoolProvider, nearbyInfrastructureProvider);
+        verifyNoInteractions(dobongAiDataset, nearbySchoolProvider, nearbyNatureProvider, nearbyInfrastructureProvider);
         var school = response.categories().get(0);
         assertThat(school.rawScore()).isEqualTo(75);
         assertThat(school.evidence()).isEmpty();
@@ -247,6 +285,33 @@ class PropertyInsightServiceTest {
         assertThat(infrastructure.rawScore()).isEqualTo(65);
         assertThat(infrastructure.evidence()).isEmpty();
         assertThat(infrastructure.calculation().policyVersion()).isEqualTo("STORED_V1");
+    }
+
+    @Test
+    void fillsMissingStoredNatureScoreFromNearbyParks() {
+        var stored = mock(PropertyAiEvaluation.class);
+        when(stored.getNatureScore()).thenReturn(null);
+        when(stored.getScoreVersion()).thenReturn("STORED_V1");
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(evaluationRepository.findById(1L)).thenReturn(Optional.of(stored));
+        when(nearbyNatureProvider.evaluate(property.getCoordinate())).thenReturn(Optional.of(
+                new KakaoNearbyNatureProvider.Result(
+                        72.0,
+                        "가장 가까운 공원은 테스트공원이며 약 600m 거리입니다.",
+                        List.of(new AiEvaluationRespDto.ScoreEvidence(
+                                "NEAREST_PARK_DISTANCE", "가장 가까운 공원", "테스트공원 · 600m",
+                                null, "700m 이하", 59.5, "카카오 로컬 공원 검색")),
+                        new AiEvaluationRespDto.ScoreCalculation("공원 점수 = 72.0", "NATIONWIDE_NATURE_V1"))));
+        stubFallbackReport();
+
+        AiEvaluationRespDto response = service.getAiEvaluation(1L);
+
+        AiEvaluationRespDto.CategoryScore nature = response.categories().stream()
+                .filter(category -> category.key() == AiEvaluationRespDto.CategoryKey.NATURE)
+                .findFirst().orElseThrow();
+        assertThat(nature.rawScore()).isEqualTo(72.0);
+        assertThat(nature.calculation().policyVersion()).isEqualTo("NATIONWIDE_NATURE_V1");
+        verify(nearbyNatureProvider).evaluate(property.getCoordinate());
     }
 
     private void stubFallbackReport() {
