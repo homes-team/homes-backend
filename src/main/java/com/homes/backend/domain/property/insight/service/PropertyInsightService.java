@@ -37,6 +37,7 @@ public class PropertyInsightService {
     private final PropertyAiEvaluationRepository evaluationRepository;
     private final DobongAiDataset dobongAiDataset;
     private final KakaoNearbySchoolProvider nearbySchoolProvider;
+    private final KakaoNearbyNatureProvider nearbyNatureProvider;
     private final KakaoNearbyInfrastructureProvider nearbyInfrastructureProvider;
     private final NationwideTransportScoreProvider nationwideTransportScoreProvider;
     private final PropertyBuildingInformationRepository buildingInformationRepository;
@@ -60,6 +61,10 @@ public class PropertyInsightService {
                 ? nearbySchoolProvider.evaluate(property.getCoordinate()) : Optional.empty();
         Optional<KakaoNearbyInfrastructureProvider.Result> nearbyInfrastructure = useNearbyProviders
                 ? nearbyInfrastructureProvider.evaluate(property.getCoordinate()) : Optional.empty();
+        boolean needsNearbyNature = dataset.isEmpty()
+                && stored.map(PropertyAiEvaluation::getNatureScore).isEmpty();
+        Optional<KakaoNearbyNatureProvider.Result> nearbyNature = needsNearbyNature
+                ? nearbyNatureProvider.evaluate(property.getCoordinate()) : Optional.empty();
         Optional<NationwideTransportScoreProvider.Result> nationwideTransport = dataset.isEmpty()
                 ? nationwideTransportScoreProvider.evaluate(property.getCoordinate())
                 : Optional.empty();
@@ -79,7 +84,8 @@ public class PropertyInsightService {
                         .orElseGet(() -> nationwideTransport
                                 .map(NationwideTransportScoreProvider.Result::score).orElse(null)));
         Double natureScore = stored.map(PropertyAiEvaluation::getNatureScore)
-                .orElseGet(() -> dataset.map(DobongAiDataset.Entry::parkScore).orElse(null));
+                .orElseGet(() -> dataset.map(DobongAiDataset.Entry::parkScore)
+                        .orElseGet(() -> nearbyNature.map(KakaoNearbyNatureProvider.Result::score).orElse(null)));
         Double sunlightScore = stored.map(PropertyAiEvaluation::getSunlightScore)
                 .orElseGet(() -> sunlightResult == null ? null : sunlightResult.score());
         Integer buildingYear = buildingInformation.map(PropertyBuildingInformation::getBuildingYear)
@@ -115,8 +121,8 @@ public class PropertyInsightService {
                         transportEvidence(dataset, nationwideTransport),
                         transportCalculation(dataset, nationwideTransport, stored, transportScore)),
                 category(CategoryKey.NATURE, "자연", natureScore, legacyOrStoredSource,
-                        natureDescription(dataset), natureEvidence(dataset),
-                        precomputedCalculation(natureScore, dataset, stored)),
+                        natureDescription(dataset, nearbyNature), natureEvidence(dataset, nearbyNature),
+                        natureCalculation(natureScore, dataset, stored, nearbyNature)),
                 category(CategoryKey.SUNLIGHT, "일조량", sunlightScore, ScoreSource.PROPERTY_RULE,
                         sunlightDescription(property), sunlightEvidence(property, sunlightResult),
                         sunlightCalculation(sunlightResult)),
@@ -146,8 +152,9 @@ public class PropertyInsightService {
         String scoreVersion = stored.map(PropertyAiEvaluation::getScoreVersion)
                 .orElseGet(() -> dataset.isPresent()
                         ? "DOBONG_GEOSPATIAL_V1"
-                        : nearbySchools.isPresent() || nationwideTransport.isPresent() || nearbyInfrastructure.isPresent()
-                                ? "NATIONWIDE_EXPLAINABLE_V3" : "PROPERTY_RULE_V2");
+                        : nearbySchools.isPresent() || nationwideTransport.isPresent()
+                                || nearbyNature.isPresent() || nearbyInfrastructure.isPresent()
+                                ? "NATIONWIDE_EXPLAINABLE_V4" : "PROPERTY_RULE_V2");
         AiEvaluationReportService.Resolution reportResolution = evaluationReportService.resolve(
                 property, categories, scoreVersion, notice, ruleBasedReport, scoreGeneratedAt);
 
@@ -322,10 +329,14 @@ public class PropertyInsightService {
      * @param dataset matching dataset entry
      * @return nature-category description
      */
-    private String natureDescription(Optional<DobongAiDataset.Entry> dataset) {
+    private String natureDescription(
+            Optional<DobongAiDataset.Entry> dataset,
+            Optional<KakaoNearbyNatureProvider.Result> nearbyNature
+    ) {
         return dataset.map(entry -> "가장 가까운 공원은 " + entry.nearestPark() + "이며 약 "
                 + Math.round(entry.parkDistanceMeters()) + "m 거리입니다.")
-                .orElse("공원과 녹지의 거리 및 밀도를 기준으로 산정합니다.");
+                .orElseGet(() -> nearbyNature.map(KakaoNearbyNatureProvider.Result::description)
+                        .orElse("공원과 녹지의 거리 및 밀도를 기준으로 산정합니다."));
     }
 
     /**
@@ -427,11 +438,27 @@ public class PropertyInsightService {
         return nearbySchools.map(KakaoNearbySchoolProvider.Result::calculation).orElse(null);
     }
 
-    private List<ScoreEvidence> natureEvidence(Optional<DobongAiDataset.Entry> dataset) {
+    private List<ScoreEvidence> natureEvidence(
+            Optional<DobongAiDataset.Entry> dataset,
+            Optional<KakaoNearbyNatureProvider.Result> nearbyNature
+    ) {
         return dataset.map(entry -> List.of(
                 evidence("NEAREST_PARK_DISTANCE", "가장 가까운 공원", entry.parkDistanceMeters(),
                         "m", "공원 접근 거리 반영", null, "도봉구 지리 데이터셋")
-        )).orElse(List.of());
+        )).orElseGet(() -> nearbyNature.map(KakaoNearbyNatureProvider.Result::evidence).orElse(List.of()));
+    }
+
+    private ScoreCalculation natureCalculation(
+            Double score,
+            Optional<DobongAiDataset.Entry> dataset,
+            Optional<PropertyAiEvaluation> stored,
+            Optional<KakaoNearbyNatureProvider.Result> nearbyNature
+    ) {
+        if (score == null) return null;
+        if (dataset.isPresent() || stored.map(PropertyAiEvaluation::getNatureScore).isPresent()) {
+            return precomputedCalculation(score, dataset, stored);
+        }
+        return nearbyNature.map(KakaoNearbyNatureProvider.Result::calculation).orElse(null);
     }
 
     private List<ScoreEvidence> sunlightEvidence(
