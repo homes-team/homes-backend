@@ -11,6 +11,8 @@ import com.homes.backend.domain.property.entity.TradeType;
 import com.homes.backend.domain.property.repository.PropertyRepository;
 import com.homes.backend.domain.user.entity.User;
 import com.homes.backend.domain.user.repository.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +43,7 @@ public class PropertySeedInitializer implements ApplicationRunner {
 
     private final PropertyRepository propertyRepository;
     private final UserRepository userRepository;
+    private final EntityManager entityManager;
     private final PropertySeedProperties properties;
     private final ObjectMapper objectMapper;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
@@ -58,6 +61,7 @@ public class PropertySeedInitializer implements ApplicationRunner {
         if (!owner.isIdentityVerified()) {
             throw new IllegalStateException("Property seed owner must be identity verified: " + ownerEmail);
         }
+        entityManager.lock(owner, LockModeType.PESSIMISTIC_WRITE);
 
         SeedDataset dataset = readDataset();
         int created = 0;

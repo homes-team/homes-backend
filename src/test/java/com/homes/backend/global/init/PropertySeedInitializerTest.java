@@ -6,10 +6,13 @@ import com.homes.backend.domain.property.entity.PropertyType;
 import com.homes.backend.domain.property.repository.PropertyRepository;
 import com.homes.backend.domain.user.entity.User;
 import com.homes.backend.domain.user.repository.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.ApplicationArguments;
@@ -19,6 +22,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -29,6 +33,7 @@ import static org.mockito.Mockito.when;
 class PropertySeedInitializerTest {
     @Mock PropertyRepository propertyRepository;
     @Mock UserRepository userRepository;
+    @Mock EntityManager entityManager;
 
     private PropertySeedProperties properties;
     private PropertySeedInitializer initializer;
@@ -39,7 +44,7 @@ class PropertySeedInitializerTest {
         properties = new PropertySeedProperties();
         properties.setOwnerEmail("seed-owner@homes.test");
         properties.setImageBaseUrl("http://localhost:8080/seed-images/");
-        initializer = new PropertySeedInitializer(propertyRepository, userRepository, properties, new ObjectMapper());
+        initializer = new PropertySeedInitializer(propertyRepository, userRepository, entityManager, properties, new ObjectMapper());
         owner = User.builder()
                 .id(77L)
                 .email("seed-owner@homes.test")
@@ -84,7 +89,9 @@ class PropertySeedInitializerTest {
         initializer.run(mock(ApplicationArguments.class));
 
         verify(propertyRepository, never()).save(any());
-        verify(propertyRepository, times(164))
+        InOrder inOrder = inOrder(entityManager, propertyRepository);
+        inOrder.verify(entityManager).lock(owner, LockModeType.PESSIMISTIC_WRITE);
+        inOrder.verify(propertyRepository, times(164))
                 .existsByUserIdAndAddressAndDetailAddress(any(), any(), any());
     }
 }
