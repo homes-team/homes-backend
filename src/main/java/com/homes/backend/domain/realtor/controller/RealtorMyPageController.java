@@ -1,5 +1,6 @@
 package com.homes.backend.domain.realtor.controller;
 
+import com.homes.backend.domain.bid.dto.response.MyBidListRespDto;
 import com.homes.backend.domain.realtor.dto.request.AgentUpdateProfileReqDto;
 import com.homes.backend.domain.realtor.dto.response.AgentDashboardStatsResDto;
 import com.homes.backend.domain.realtor.dto.response.AgentProfileResDto;
@@ -58,6 +59,14 @@ public class RealtorMyPageController implements RealtorMyPageControllerDocs {
     @GetMapping("/me/bids/available")
     public ApiResponse<List<NearbyPropertyResDto>> getBiddableProperties(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         List<NearbyPropertyResDto> response = realtorService.getBiddableProperties(userPrincipal.getId());
+        return ApiResponse.onSuccess(response);
+    }
+
+    @Override
+    @PreAuthorize("hasRole('AGENT')")
+    @GetMapping("/me/bids")
+    public ApiResponse<List<MyBidListRespDto>> getMyBids(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        List<MyBidListRespDto> response = realtorService.getMyBids(userPrincipal.getId());
         return ApiResponse.onSuccess(response);
     }
 

@@ -1,5 +1,6 @@
 package com.homes.backend.domain.realtor.controller;
 
+import com.homes.backend.domain.bid.dto.response.MyBidListRespDto;
 import com.homes.backend.domain.realtor.dto.request.AgentUpdateProfileReqDto;
 import com.homes.backend.domain.realtor.dto.response.AgentDashboardStatsResDto;
 import com.homes.backend.domain.realtor.dto.response.AgentProfileResDto;
@@ -46,6 +47,14 @@ public interface RealtorMyPageControllerDocs {
             "아직 본인이 입찰을 넣지 않은 매물만 조회합니다. 사무소 좌표를 등록하지 않은 경우 조회할 수 없습니다.")
     @GetMapping("/me/bids/available")
     ApiResponse<List<NearbyPropertyResDto>> getBiddableProperties(
+            @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal
+    );
+
+    @Operation(summary = "중개사 마이페이지 - 내가 보낸 입찰 제안서 목록 조회", description = "본인이 보낸 입찰 제안서 전체 이력을 최신순으로 조회합니다. " +
+            "제안서 1건당 1행으로 보여주며, 역제안으로 가격을 낮춰 다시 보낸 경우 currentFee에 최신 역제안 금액이 반영됩니다 " +
+            "(역제안이 없으면 최초 제안 금액과 동일).")
+    @GetMapping("/me/bids")
+    ApiResponse<List<MyBidListRespDto>> getMyBids(
             @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal
     );
 
