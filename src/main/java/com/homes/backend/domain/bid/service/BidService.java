@@ -247,6 +247,10 @@ public class BidService {
      */
     @Transactional
     public void withdrawBid(Long propertyId, Long bidId, Long userId) {
+        // 동시성 제어: 수락(acceptBid) 로직과 충돌하지 않도록 매물에 비관적 락 획득
+        propertyRepository.findByIdWithPessimisticLock(propertyId)
+                .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+
         // AGENT 권한 및 본인이 작성한 제안서인지 검증
         Bid bid = validateAccessRight(propertyId, bidId, userId, "AGENT");
 
@@ -263,6 +267,10 @@ public class BidService {
      */
     @Transactional
     public void rejectBid(Long propertyId, Long bidId, Long userId) {
+        // 동시성 제어: 수락(acceptBid) 로직과 충돌하지 않도록 매물에 비관적 락 획득
+        propertyRepository.findByIdWithPessimisticLock(propertyId)
+                .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+
         // USER 권한 및 본인 소유의 매물인지 검증
         Bid bid = validateAccessRight(propertyId, bidId, userId, "USER");
 
