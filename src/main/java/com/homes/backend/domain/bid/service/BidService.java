@@ -242,6 +242,38 @@ public class BidService {
         property.completeDeal();
     }
 
+    /**
+     * [중개사 전용] 대기 중(PENDING)인 입찰 제안서 철회
+     */
+    @Transactional
+    public void withdrawBid(Long propertyId, Long bidId, Long userId) {
+        // AGENT 권한 및 본인이 작성한 제안서인지 검증
+        Bid bid = validateAccessRight(propertyId, bidId, userId, "AGENT");
+
+        if (bid.getStatus() != BidStatus.PENDING) {
+            throw new CustomException(BidErrorCode.BID_NOT_PENDING);
+        }
+
+        // 제안서 상태를 철회(WITHDRAWN) 처리
+        bid.withdraw();
+    }
+
+    /**
+     * [집주인 전용] 대기 중(PENDING)인 입찰 제안서 명시적 거절
+     */
+    @Transactional
+    public void rejectBid(Long propertyId, Long bidId, Long userId) {
+        // USER 권한 및 본인 소유의 매물인지 검증
+        Bid bid = validateAccessRight(propertyId, bidId, userId, "USER");
+
+        if (bid.getStatus() != BidStatus.PENDING) {
+            throw new CustomException(BidErrorCode.BID_NOT_PENDING);
+        }
+
+        // 제안서 상태를 거절(REJECTED) 처리
+        bid.reject();
+    }
+
     // ================= [ 공통 검증 로직 ] =================
 
     /**

@@ -49,6 +49,16 @@ public class Bid extends BaseEntity {
         this.status = BidStatus.CANCELLED;
     }
 
+    // 중개사가 스스로 PENDING 제안서를 철회(취소)
+    public void withdraw() {
+        this.status = BidStatus.WITHDRAWN;
+    }
+
+    // 집주인이 PENDING 제안서를 거절
+    public void reject() {
+        this.status = BidStatus.REJECTED;
+    }
+
     @Builder
     public Bid(Double proposedFee, String content, Agent agent, Property property) {
         this.proposedFee = proposedFee;
