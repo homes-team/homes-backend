@@ -105,4 +105,28 @@ public class BidController implements BidControllerDocs{
         bidService.completeBid(propertyId, bidId, userPrincipal.getId());
         return ApiResponse.onSuccess(null);
     }
+
+    @Override
+    @PreAuthorize("hasRole('AGENT')")
+    @PatchMapping("/{bidId}/withdraw")
+    public ApiResponse<Void> withdrawBid(
+            @PathVariable Long propertyId,
+            @PathVariable Long bidId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        bidService.withdrawBid(propertyId, bidId, userPrincipal.getId());
+        return ApiResponse.onSuccess(null);
+    }
+
+    @Override
+    @PreAuthorize("hasRole('USER')")
+    @PatchMapping("/{bidId}/reject")
+    public ApiResponse<Void> rejectBid(
+            @PathVariable Long propertyId,
+            @PathVariable Long bidId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        bidService.rejectBid(propertyId, bidId, userPrincipal.getId());
+        return ApiResponse.onSuccess(null);
+    }
 }

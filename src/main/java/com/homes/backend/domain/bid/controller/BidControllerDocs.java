@@ -71,4 +71,18 @@ public interface BidControllerDocs {
             @PathVariable Long bidId,
             @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal
     );
+
+    @Operation(summary = "제안서 철회", description = "중개사가 아직 대기 중(PENDING)인 입찰 제안서를 스스로 철회(WITHDRAWN)합니다.")
+    ApiResponse<Void> withdrawBid(
+            @PathVariable Long propertyId,
+            @PathVariable Long bidId,
+            @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal
+    );
+
+    @Operation(summary = "제안서 거절", description = "집주인이 대기 중(PENDING)인 입찰 제안서를 명시적으로 거절(REJECTED)합니다.")
+    ApiResponse<Void> rejectBid(
+            @PathVariable Long propertyId,
+            @PathVariable Long bidId,
+            @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal
+    );
 }
