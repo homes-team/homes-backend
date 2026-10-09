@@ -2,6 +2,9 @@ package com.homes.backend.domain.property.insight.controller;
 
 import com.homes.backend.domain.property.insight.dto.AiEvaluationRespDto;
 import com.homes.backend.domain.property.insight.dto.IsochroneRespDto;
+import com.homes.backend.domain.property.insight.dto.NearbyFacilitiesRespDto;
+import com.homes.backend.domain.property.insight.dto.NearbyFacilitiesRespDto.FacilityType;
+import com.homes.backend.domain.property.insight.service.NearbyFacilityService;
 import com.homes.backend.domain.property.insight.service.PropertyInsightService;
 import com.homes.backend.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/properties/{propertyId}")
 public class PropertyInsightController implements PropertyInsightControllerDocs {
     private final PropertyInsightService propertyInsightService;
+    private final NearbyFacilityService nearbyFacilityService;
 
     /**
      * Returns the AI evaluation for a property.
@@ -41,5 +45,15 @@ public class PropertyInsightController implements PropertyInsightControllerDocs 
             @RequestParam(name = "time") int travelTimeMinutes
     ) {
         return ApiResponse.onSuccess(propertyInsightService.getIsochrone(propertyId, mode, travelTimeMinutes));
+    }
+
+    @Override
+    @GetMapping("/nearby-facilities")
+    public ApiResponse<NearbyFacilitiesRespDto> getNearbyFacilities(
+            @PathVariable Long propertyId,
+            @RequestParam(defaultValue = "2000") int radius,
+            @RequestParam(required = false) java.util.Set<FacilityType> types
+    ) {
+        return ApiResponse.onSuccess(nearbyFacilityService.getNearbyFacilities(propertyId, radius, types));
     }
 }
