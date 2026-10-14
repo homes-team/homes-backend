@@ -4,7 +4,7 @@ services:
     container_name: homes-postgres-dev
     environment:
       POSTGRES_USER: homes
-      POSTGRES_PASSWORD: ghawmdb2026!
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: homes_db
       TZ: Asia/Seoul
     ports:
