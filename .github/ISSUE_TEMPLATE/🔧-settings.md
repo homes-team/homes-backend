@@ -1,7 +1,7 @@
 ---
 name: "\U0001F527 Settings"
 about: 빌드, 환경 설정 작업
-title: ''
+title: "\U0001F527 Settings: "
 labels: ''
 assignees: ''
 

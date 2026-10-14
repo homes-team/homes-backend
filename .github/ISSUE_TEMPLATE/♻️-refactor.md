@@ -1,7 +1,7 @@
 ---
 name: "♻️ Refactor"
 about: 코드 리팩터링
-title: ''
+title: "♻️ Refactor: "
 labels: ''
 assignees: ''
 

@@ -1,7 +1,7 @@
 ---
 name: "\U0001F691 Hotfix"
 about: 운영 환경 긴급 수정
-title: ''
+title: "\U0001F691 Hotfix: "
 labels: ''
 assignees: ''
 
