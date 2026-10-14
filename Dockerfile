@@ -12,6 +12,10 @@ RUN ./gradlew dependencies --no-daemon || true
 
 # 소스 복사 후 실행 가능한 .jar 파일로 빌드
 COPY . .
+
+# gradlew에 실행 권한 부여
+RUN chmod +x ./gradlew
+
 RUN ./gradlew clean bootJar --no-daemon
 
 # ===== 2) RUNTIME STAGE =====
