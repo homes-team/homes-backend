@@ -1,4 +1,15 @@
 services:
+  app:
+    image: homes-app:local
+    container_name: homes-app-dev
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+    depends_on:
+      - homes-postgres
+    restart: unless-stopped
+
   homes-postgres:
     image: postgres:15
     container_name: homes-postgres-dev

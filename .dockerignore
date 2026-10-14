@@ -1,0 +1,8 @@
+.gradle
+build
+.git
+.gitignore
+.DS_Store
+node_modules
+*.log
+_vol/

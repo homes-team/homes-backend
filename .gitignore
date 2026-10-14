@@ -64,3 +64,6 @@ google-vision-key.json
 
 # Docker Volume
 _vol/
+
+# DB Password
+.env
