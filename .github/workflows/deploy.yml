@@ -18,6 +18,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
       # Docker Buildx 준비 (멀티아키 빌드)
       - name: Set up QEMU (multi-arch emulation)
         uses: docker/setup-qemu-action@v3
