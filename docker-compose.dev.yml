@@ -1,0 +1,13 @@
+services:
+  homes-postgres:
+    image: postgres:15
+    container_name: homes-postgres-dev
+    environment:
+      POSTGRES_USER: homes
+      POSTGRES_PASSWORD: ghawmdb2026!
+      POSTGRES_DB: homes_db
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./_vol/postgres:/var/lib/postgresql/data
