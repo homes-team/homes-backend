@@ -61,3 +61,6 @@ claude.md
 
 ### Google Cloud Vision API Key ###
 google-vision-key.json
+
+# Docker Volume
+_vol/
