@@ -1,0 +1,24 @@
+services:
+  app:
+    image: homes-app:local
+    container_name: homes-app-dev
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+    depends_on:
+      - homes-postgres
+    restart: unless-stopped
+
+  homes-postgres:
+    image: postgres:15
+    container_name: homes-postgres-dev
+    environment:
+      POSTGRES_USER: homes
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: homes_db
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./_vol/postgres:/var/lib/postgresql/data

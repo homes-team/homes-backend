@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>채팅/알림 실시간 테스트</title>
+<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7/bundles/stomp.umd.min.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 720px; margin: 30px auto; padding: 0 16px; }
+  fieldset { margin-bottom: 16px; }
+  label { display: block; margin: 8px 0 4px; font-weight: bold; }
+  input[type=text] { width: 100%; padding: 6px; box-sizing: border-box; }
+  button { padding: 8px 16px; margin-top: 8px; cursor: pointer; }
+  #log { background: #111; color: #0f0; padding: 12px; height: 320px; overflow-y: auto;
+         font-family: monospace; font-size: 13px; white-space: pre-wrap; }
+  .status { font-weight: bold; }
+  .status.connected { color: green; }
+  .status.disconnected { color: #999; }
+</style>
+</head>
+<body>
+  <h2>채팅/알림 실시간 테스트 (Swagger 대용)</h2>
+
+  <fieldset>
+    <legend>0. 알림(SSE) 연결</legend>
+    <label>JWT accessToken (알림 받을 계정)</label>
+    <input type="text" id="notifToken" placeholder="이 계정으로 알림을 받음 - 채팅방의 상대방 토큰을 넣으면 됨">
+    <button id="notifConnectBtn" onclick="connectNotifications()">알림 스트림 연결</button>
+    <button id="notifDisconnectBtn" onclick="disconnectNotifications()" disabled>알림 연결 끊기</button>
+    <p>상태: <span id="notifStatus" class="status disconnected">연결 안 됨</span></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>1. 접속</legend>
+    <label>JWT accessToken (티켓 발급용, 접속 URL에는 직접 안 실림)</label>
+    <input type="text" id="token" placeholder="로그인 응답의 accessToken을 붙여넣기">
+    <label>chatId</label>
+    <input type="text" id="chatId" placeholder="예: 17">
+    <button id="connectBtn" onclick="connect()">연결 + 구독</button>
+    <button id="disconnectBtn" onclick="disconnect()" disabled>연결 끊기</button>
+    <p>상태: <span id="status" class="status disconnected">연결 안 됨</span></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>2. 메시지 보내기</legend>
+    <label>내용</label>
+    <input type="text" id="content" placeholder="보낼 메시지 입력" onkeydown="if(event.key==='Enter') sendMessage()">
+    <button id="sendBtn" onclick="sendMessage()" disabled>전송</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>3. 로그 (채팅 연결/메시지 + 알림 전부 여기 같이 찍힘)</legend>
+    <div id="log"></div>
+  </fieldset>
+
+<script>
+  let stompClient = null;
+  let eventSource = null;
+
+  function log(msg) {
+    const el = document.getElementById('log');
+    const time = new Date().toLocaleTimeString();
+    el.textContent += `[${time}] ${msg}\n`;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setConnected(connected) {
+    document.getElementById('connectBtn').disabled = connected;
+    document.getElementById('disconnectBtn').disabled = !connected;
+    document.getElementById('sendBtn').disabled = !connected;
+    const statusEl = document.getElementById('status');
+    statusEl.textContent = connected ? '연결됨' : '연결 안 됨';
+    statusEl.className = 'status ' + (connected ? 'connected' : 'disconnected');
+  }
+
+  function setNotifConnected(connected) {
+    document.getElementById('notifConnectBtn').disabled = connected;
+    document.getElementById('notifDisconnectBtn').disabled = !connected;
+    const statusEl = document.getElementById('notifStatus');
+    statusEl.textContent = connected ? '연결됨' : '연결 안 됨';
+    statusEl.className = 'status ' + (connected ? 'connected' : 'disconnected');
+  }
+
+  // REST(POST /ws/tickets)로 1회용 티켓을 발급받는다. 웹소켓과 SSE 둘 다 이 티켓 발급 엔드포인트를 같이 씀
+  async function issueTicket(token) {
+    const res = await fetch(`http://${location.hostname}:8080/ws/tickets`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const body = await res.json();
+    if (!res.ok || !body.result) {
+      throw new Error('티켓 발급 실패: ' + JSON.stringify(body));
+    }
+    return body.result.ticket;
+  }
+
+  async function connectNotifications() {
+    const token = document.getElementById('notifToken').value.trim();
+    if (!token) {
+      alert('알림 받을 계정의 토큰을 입력해줘');
+      return;
+    }
+
+    log('[알림] 티켓 발급 요청 중...');
+    let ticket;
+    try {
+      ticket = await issueTicket(token);
+      log('[알림] 티켓 발급 성공');
+    } catch (e) {
+      log('[알림] X ' + e.message);
+      return;
+    }
+
+    const sseUrl = `http://${location.hostname}:8080/users/me/notifications/stream?ticket=${encodeURIComponent(ticket)}`;
+    eventSource = new EventSource(sseUrl);
+
+    eventSource.addEventListener('connect', () => {
+      log('[알림] SSE 연결 성공');
+      setNotifConnected(true);
+    });
+    eventSource.addEventListener('notification', (event) => {
+      log('[알림] 알림 수신: ' + event.data);
+    });
+    eventSource.onerror = () => {
+      // EventSource는 기본적으로 같은 URL로 자동 재접속을 시도하는데, 티켓은 1회용이라 재접속은 항상 실패함.
+      // close()를 안 하면 브라우저가 백그라운드에서 계속 재시도하다 실패하는 루프에 빠짐 - 명시적으로 끊어야 함.
+      log('[알림] ❌ SSE 연결 에러 (또는 서버가 연결을 닫음) - 자동 재접속 방지를 위해 연결 종료함');
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      setNotifConnected(false);
+    };
+  }
+
+  function disconnectNotifications() {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+      setNotifConnected(false);
+      log('[알림] 연결을 직접 종료함');
+    }
+  }
+
+  async function connect() {
+    const token = document.getElementById('token').value.trim();
+    const chatId = document.getElementById('chatId').value.trim();
+    if (!token || !chatId) {
+      alert('토큰과 chatId를 입력해줘');
+      return;
+    }
+
+    log('티켓 발급 요청 중...');
+    let ticket;
+    try {
+      ticket = await issueTicket(token);
+      log('티켓 발급 성공 (30초 내 접속해야 함)');
+    } catch (e) {
+      log('X ' + e.message);
+      return;
+    }
+
+    const wsUrl = `ws://${location.hostname}:8080/ws/chats?ticket=${encodeURIComponent(ticket)}`;
+    stompClient = new StompJs.Client({
+      brokerURL: wsUrl,
+      reconnectDelay: 0,
+      onConnect: () => {
+        log('연결 성공 (CONNECTED)');
+        setConnected(true);
+        stompClient.subscribe(`/topic/chats/${chatId}`, (message) => {
+          log('수신: ' + message.body);
+        });
+        log(`/topic/chats/${chatId} 구독 시작`);
+      },
+      onStompError: (frame) => {
+        log('STOMP 에러: ' + frame.headers['message'] + ' / ' + frame.body);
+      },
+      onWebSocketClose: (evt) => {
+        log(`연결 종료 (code=${evt.code})`);
+        setConnected(false);
+      },
+      onWebSocketError: () => {
+        log('웹소켓 연결 자체가 실패함 (토큰 오류 또는 서버 미기동 확인)');
+      }
+    });
+
+    log('연결 시도 중...');
+    stompClient.activate();
+  }
+
+  function disconnect() {
+    if (stompClient) {
+      stompClient.deactivate();
+      setConnected(false);
+      log('연결을 직접 종료함');
+    }
+  }
+
+  function sendMessage() {
+    const chatId = document.getElementById('chatId').value.trim();
+    const content = document.getElementById('content').value.trim();
+    if (!content) return;
+    stompClient.publish({
+      destination: `/app/chats/${chatId}/send`,
+      body: JSON.stringify({ content })
+    });
+    log('전송: ' + content);
+    document.getElementById('content').value = '';
+  }
+</script>
+</body>
+</html>

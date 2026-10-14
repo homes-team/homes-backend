@@ -1,21 +1,11 @@
 HELP.md
-target/
-!-Werror
-.attach_pid*
-hs_err_pid*
-cpr_dump_core*
-core
-*.log
-*.err
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
 
-# IntelliJ IDEA
-.idea/
-*.iws
-*.iml
-*.ipr
-out/
-
-# Eclipse
+### STS ###
 .apt_generated
 .classpath
 .factorypath
@@ -23,29 +13,57 @@ out/
 .settings
 .springBeans
 .sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
 
-# NetBeans
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-# VS Code
+### VS Code ###
 .vscode/
 
-# OS specific files
+### Env / Secrets ###
+.env
+*.env
+.env.prod
+application-local.yml
+application-local.yaml
+
+
+### Logs ###
+logs/
+*.log
+
+### OS ###
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 
-# Gradle
-.gradle
-/build/
+### etc ###
+.claude/
+CLAUDE.md
+claude.md
+*.claude
+.claude_cache/
+
+### Google Cloud Vision API Key ###
+google-vision-key.json
+
+# Docker Volume
+_vol/
+
+# DB Password
+.env

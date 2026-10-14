@@ -1,0 +1,108 @@
+package com.homes.backend.domain.bid.repository;
+
+import com.homes.backend.domain.bid.entity.Bid;
+import com.homes.backend.domain.bid.entity.BidStatus;
+import com.homes.backend.domain.property.entity.PropertyStatus;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+public interface BidRepository extends JpaRepository<Bid, Long> {
+    // 특정 매물에 달린 입찰 목록 중 "집주인이 지금 고를 수 있는" 진행 중인(PENDING/ACCEPTED) 것만 최신순으로 조회
+    // 취소/거절된 이력은 이 목록에서 제외한다 (같은 중개사가 재입찰하면 옛 취소 건과 새 대기 건이 중복으로 보이는 걸 방지)
+    @EntityGraph(attributePaths = {"agent"})
+    List<Bid> findAllByPropertyIdAndStatusInOrderByCreatedAtDesc(Long propertyId, List<BidStatus> statuses);
+
+    /**
+     * 이 매물을 "담당"하는 중개사 조회 - 수락된(ACCEPTED) 입찰은 매물당 최대 1건이라는 전제
+     *
+     * @param propertyId 매물 ID
+     * @param status 조회할 입찰 상태
+     * @return 조건에 맞는 입찰, 없으면 빈 값
+     */
+    @EntityGraph(attributePaths = {"agent"})
+    Optional<Bid> findByPropertyIdAndStatus(Long propertyId, BidStatus status);
+
+    /**
+     * 담당 중개사의 다른 매물 조회용 - 현재 매물은 제외하고, 삭제된 매물도 제외
+     *
+     * @param agentId 중개사 ID
+     * @param status 조회할 입찰 상태
+     * @param excludePropertyId 결과에서 제외할 현재 매물 ID
+     * @param excludedPropertyStatus 결과에서 제외할 매물 상태
+     * @return 조건에 맞는 입찰 목록
+     */
+    @Query("SELECT b FROM Bid b JOIN FETCH b.property p " +
+            "WHERE b.agent.id = :agentId AND b.status = :status " +
+            "AND p.id <> :excludePropertyId AND p.status <> :excludedPropertyStatus " +
+            "ORDER BY b.createdAt DESC")
+    List<Bid> findOtherAcceptedBidsByAgent(
+            @Param("agentId") Long agentId,
+            @Param("status") BidStatus status,
+            @Param("excludePropertyId") Long excludePropertyId,
+            @Param("excludedPropertyStatus") PropertyStatus excludedPropertyStatus
+    );
+
+    /**
+     * 해당 매물에 해당 중개사의 "진행 중인"(취소/거절되지 않은) 제안서가 존재하는지 검사
+     */
+    boolean existsByPropertyIdAndAgentIdAndStatusIn(Long propertyId, Long agentId, List<BidStatus> statuses);
+
+    /**
+     * 중개사 마이페이지 통계 - 이번 달 거래(수락 확정 + 거래완료) 건수
+     */
+    @Query("SELECT COUNT(b) FROM Bid b " +
+            "WHERE b.agent.id = :agentId AND b.status = :bidStatus " +
+            "AND b.property.status = :propertyStatus " +
+            "AND b.property.dealCompletedAt >= :start AND b.property.dealCompletedAt < :exclusiveEnd")
+    long countCompletedDealsInRange(
+            @Param("agentId") Long agentId,
+            @Param("bidStatus") BidStatus bidStatus,
+            @Param("propertyStatus") PropertyStatus propertyStatus,
+            @Param("start") LocalDateTime start,
+            @Param("exclusiveEnd") LocalDateTime exclusiveEnd
+    );
+
+    /**
+     * 중개사 마이페이지 통계 - 매물 종류별 평균 확정 수수료 (전체 기간)
+     */
+    @Query("SELECT b.property.propertyType AS propertyType, AVG(b.finalFee) AS averageFee " +
+            "FROM Bid b " +
+            "WHERE b.agent.id = :agentId AND b.finalFee IS NOT NULL " +
+            "GROUP BY b.property.propertyType")
+    List<AgentFeeByPropertyTypeProjection> findAverageFeeByPropertyType(@Param("agentId") Long agentId);
+
+    /**
+     * 중개사 성사율 계산 - 전체 입찰 건수 / 상태별 입찰 건수
+     */
+    long countByAgentId(Long agentId);
+
+    long countByAgentIdAndStatus(Long agentId, BidStatus status);
+
+    /**
+     * 매칭 완료 되지 못한 입찰 제안서 거절로 상태 변환
+     */
+    @Modifying
+    @Query("UPDATE Bid b SET b.status = 'REJECTED' WHERE b.property.id = :propertyId AND b.id != :acceptedBidId AND b.status = 'PENDING'")
+    void rejectOtherPendingBids(@Param("propertyId") Long propertyId, @Param("acceptedBidId") Long acceptedBidId);
+
+    /**
+     * 리뷰 작성 자격 검증용 - 이 유저(집주인) 소유의 매물에, 이 중개사와 매칭(ACCEPTED)된 적이
+     * 한 번이라도 있는지 확인한다. CANCELLED는 cancelBid()가 ACCEPTED 상태에서만 호출 가능하므로
+     * "한 번은 매칭됐었다가 이후 취소됨"을 의미한다 - 취소됐어도 실제로 상호작용은 있었으므로 리뷰 자격에 포함한다.
+     * 거래완료 여부(Property.status)와는 무관하게, 매칭된 적이 있다는 사실만 확인하면 충분하다고 본다.
+     */
+    boolean existsByAgentIdAndPropertyUserIdAndStatusIn(Long agentId, Long propertyUserId, List<BidStatus> statuses);
+
+    /**
+     * 중개사 마이페이지 - 본인이 보낸 입찰 제안서 목록 (전체 이력, 최신순)
+     */
+    @EntityGraph(attributePaths = {"property"})
+    List<Bid> findAllByAgentIdOrderByCreatedAtDesc(Long agentId);
+}

@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "regions": [
+    { "scope": "SEOUL", "city": "서울특별시", "district": "강남구", "dong": "대치동", "address": "서울 강남구 삼성로 212", "latitude": 37.4982, "longitude": 127.0653, "priceFactor": 2.40, "apartmentName": "은마아파트" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "강동구", "dong": "고덕동", "address": "서울 강동구 고덕로 333", "latitude": 37.5567, "longitude": 127.1592, "priceFactor": 1.45, "apartmentName": "고덕그라시움" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "강북구", "dong": "미아동", "address": "서울 강북구 솔샘로 174", "latitude": 37.6178, "longitude": 127.0124, "priceFactor": 0.88, "apartmentName": "SK북한산시티" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "강서구", "dong": "마곡동", "address": "서울 강서구 마곡서로 133", "latitude": 37.5666, "longitude": 126.8237, "priceFactor": 1.25, "apartmentName": "마곡엠밸리7단지" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "관악구", "dong": "봉천동", "address": "서울 관악구 성현로 80", "latitude": 37.4894, "longitude": 126.9567, "priceFactor": 1.02, "apartmentName": "관악드림타운" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "광진구", "dong": "광장동", "address": "서울 광진구 아차산로 537-17", "latitude": 37.5437, "longitude": 127.1018, "priceFactor": 1.55, "apartmentName": "광장힐스테이트" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "구로구", "dong": "신도림동", "address": "서울 구로구 경인로65길 16-15", "latitude": 37.5071, "longitude": 126.8817, "priceFactor": 1.20, "apartmentName": "신도림4차e편한세상" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "금천구", "dong": "시흥동", "address": "서울 금천구 금하로 816", "latitude": 37.4497, "longitude": 126.9082, "priceFactor": 0.78, "apartmentName": "벽산5단지" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "노원구", "dong": "중계동", "address": "서울 노원구 동일로207길 17", "latitude": 37.6429, "longitude": 127.0648, "priceFactor": 0.90, "apartmentName": "중계그린아파트" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "도봉구", "dong": "방학동", "address": "서울 도봉구 방학로11길 36", "latitude": 37.6604, "longitude": 127.0358, "priceFactor": 0.76, "apartmentName": "벽산아파트1" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "동대문구", "dong": "전농동", "address": "서울 동대문구 사가정로 65", "latitude": 37.5764, "longitude": 127.0542, "priceFactor": 1.08, "apartmentName": "래미안크레시티" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "동작구", "dong": "흑석동", "address": "서울 동작구 흑석한강로 12", "latitude": 37.5051, "longitude": 126.9621, "priceFactor": 1.62, "apartmentName": "흑석한강센트레빌" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "마포구", "dong": "아현동", "address": "서울 마포구 마포대로 195", "latitude": 37.5541, "longitude": 126.9561, "priceFactor": 1.72, "apartmentName": "마포래미안푸르지오" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "서대문구", "dong": "남가좌동", "address": "서울 서대문구 가재울미래로 2", "latitude": 37.5744, "longitude": 126.9177, "priceFactor": 1.20, "apartmentName": "DMC파크뷰자이" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "서초구", "dong": "반포동", "address": "서울 서초구 신반포로 270", "latitude": 37.5066, "longitude": 127.0094, "priceFactor": 2.35, "apartmentName": "반포자이" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "성동구", "dong": "행당동", "address": "서울 성동구 고산자로2길 65", "latitude": 37.5561, "longitude": 127.0365, "priceFactor": 1.58, "apartmentName": "서울숲리버뷰자이" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "성북구", "dong": "길음동", "address": "서울 성북구 길음로9길 50", "latitude": 37.6050, "longitude": 127.0226, "priceFactor": 1.05, "apartmentName": "길음뉴타운9단지" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "송파구", "dong": "가락동", "address": "서울 송파구 송파대로 345", "latitude": 37.4976, "longitude": 127.1070, "priceFactor": 1.92, "apartmentName": "헬리오시티" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "양천구", "dong": "목동", "address": "서울 양천구 목동로 212", "latitude": 37.5285, "longitude": 126.8726, "priceFactor": 1.45, "apartmentName": "목동신시가지7단지" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "영등포구", "dong": "여의도동", "address": "서울 영등포구 여의동로3길 10", "latitude": 37.5181, "longitude": 126.9264, "priceFactor": 1.88, "apartmentName": "여의도자이" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "용산구", "dong": "이촌동", "address": "서울 용산구 이촌로 201", "latitude": 37.5200, "longitude": 126.9714, "priceFactor": 2.18, "apartmentName": "한가람아파트" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "은평구", "dong": "진관동", "address": "서울 은평구 진관1로 21-10", "latitude": 37.6379, "longitude": 126.9192, "priceFactor": 1.00, "apartmentName": "은평뉴타운박석고개" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "종로구", "dong": "교남동", "address": "서울 종로구 송월길 99", "latitude": 37.5712, "longitude": 126.9611, "priceFactor": 1.75, "apartmentName": "경희궁자이" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "중구", "dong": "신당동", "address": "서울 중구 다산로 32", "latitude": 37.5477, "longitude": 127.0092, "priceFactor": 1.45, "apartmentName": "남산타운" },
+    { "scope": "SEOUL", "city": "서울특별시", "district": "중랑구", "dong": "신내동", "address": "서울 중랑구 신내로19길 42", "latitude": 37.6157, "longitude": 127.0936, "priceFactor": 0.88, "apartmentName": "신내6단지" },
+
+    { "scope": "GYEONGGI", "city": "수원시", "district": "영통구", "dong": "망포동", "address": "경기 수원시 영통구 덕영대로 1462-14", "latitude": 37.2454, "longitude": 127.0558, "priceFactor": 0.82, "apartmentName": "벽적골8단지" },
+    { "scope": "GYEONGGI", "city": "성남시", "district": "분당구", "dong": "운중동", "address": "경기 성남시 분당구 판교원로 68", "latitude": 37.3908, "longitude": 127.0772, "priceFactor": 1.25, "apartmentName": "산운마을13단지" },
+
+    { "scope": "PROVINCE", "city": "춘천시", "district": "퇴계동", "dong": "퇴계동", "address": "강원특별자치도 춘천시 퇴계로 220-19", "latitude": 37.8508, "longitude": 127.7437, "priceFactor": 0.46, "apartmentName": "퇴계주공아파트" },
+    { "scope": "PROVINCE", "city": "청주시", "district": "흥덕구", "dong": "복대동", "address": "충북 청주시 흥덕구 대농로 55", "latitude": 36.6438, "longitude": 127.4268, "priceFactor": 0.52, "apartmentName": "두산위브지웰시티" },
+    { "scope": "PROVINCE", "city": "천안시", "district": "서북구", "dong": "불당동", "address": "충남 천안시 서북구 불당26로 77", "latitude": 36.8151, "longitude": 127.1078, "priceFactor": 0.56, "apartmentName": "불당지웰시티" },
+    { "scope": "PROVINCE", "city": "전주시", "district": "완산구", "dong": "효자동", "address": "전북특별자치도 전주시 완산구 홍산로 390", "latitude": 35.8170, "longitude": 127.1068, "priceFactor": 0.48, "apartmentName": "서부신시가지아이파크" },
+    { "scope": "PROVINCE", "city": "무안군", "district": "삼향읍", "dong": "남악리", "address": "전남 무안군 삼향읍 남악5로72번길 81-21", "latitude": 34.8118, "longitude": 126.4653, "priceFactor": 0.40, "apartmentName": "남악신도시아이파크" },
+    { "scope": "PROVINCE", "city": "포항시", "district": "북구", "dong": "창포동", "address": "경북 포항시 북구 새천년대로 1123", "latitude": 36.0708, "longitude": 129.3693, "priceFactor": 0.45, "apartmentName": "창포주공아파트" },
+    { "scope": "PROVINCE", "city": "창원시", "district": "성산구", "dong": "반림동", "address": "경남 창원시 성산구 원이대로 449", "latitude": 35.2347, "longitude": 128.6677, "priceFactor": 0.54, "apartmentName": "노블파크아파트" },
+    { "scope": "PROVINCE", "city": "제주시", "district": "연동", "dong": "연동", "address": "제주특별자치도 제주시 연북로 90", "latitude": 33.4815, "longitude": 126.4948, "priceFactor": 0.62, "apartmentName": "연동대림아파트" }
+  ]
+}

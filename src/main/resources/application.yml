@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: homes-backend
+  profiles:
+    active: local # application-local.yml을 실행하겠다는 뜻
+    include:
+      - local
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB       # 파일 한 개당 최대 용량 (10MB로 업그레이드)
+      max-request-size: 50MB    # 한 번의 요청에 포함된 모든 파일 총합 용량 제한 (50MB)
+  output:
+    ansi:
+      enabled: always # 콘솔 로그 컬러 색상 적용
+
+
+server:
+  port: 8080
+
+external-api:
+  public-data:
+    service-key: ${PUBLIC_DATA_SERVICE_KEY:}
+    building-register-url: ${BUILDING_REGISTER_API_URL:https://apis.data.go.kr/1613000/BldRgstHubService}
+    apartment-list-url: ${APARTMENT_LIST_API_URL:https://apis.data.go.kr/1613000/AptListService4}
+    apartment-basis-url: ${APARTMENT_BASIS_API_URL:https://apis.data.go.kr/1613000/AptBasisInfoServiceV5}
+    apartment-trade-url: ${APARTMENT_TRADE_API_URL:https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade}
+    connect-timeout-millis: 3000
+    read-timeout-millis: 5000
+
+app:
+  seed:
+    properties:
+      enabled: ${PROPERTY_SEED_ENABLED:false}
+      owner-email: ${PROPERTY_SEED_OWNER_EMAIL:}
+      image-base-url: ${PROPERTY_SEED_IMAGE_BASE_URL:http://localhost:8080/seed-images}
+
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY:}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /api-docs

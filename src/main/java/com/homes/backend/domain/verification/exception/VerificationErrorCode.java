@@ -1,0 +1,31 @@
+package com.homes.backend.domain.verification.exception;
+
+import com.homes.backend.global.exception.model.BaseErrorCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+
+@Getter
+@RequiredArgsConstructor
+public enum VerificationErrorCode implements BaseErrorCode {
+    ALREADY_VERIFIED("VERIFY400_1", "이미 현장 인증이 완료된 매물입니다.", HttpStatus.BAD_REQUEST),
+    EXIF_NOT_FOUND("VERIFY400_2", "사진의 메타데이터(EXIF)를 찾을 수 없습니다. (스크린샷 등 불가)", HttpStatus.BAD_REQUEST),
+    EXIF_GPS_NOT_MATCH("VERIFY400_3", "사진이 촬영된 위치가 매물 반경 100m를 벗어납니다.", HttpStatus.BAD_REQUEST),
+    EXIF_TIME_NOT_FOUND("VERIFY400_4", "사진의 촬영 시각 정보를 찾을 수 없습니다.", HttpStatus.BAD_REQUEST),
+    EXIF_TIME_EXPIRED("VERIFY400_5", "촬영 후 1시간이 지난 과거 사진은 인증할 수 없습니다.", HttpStatus.BAD_REQUEST),
+    EXIF_TIME_FUTURE("VERIFY400_7", "미래 시각으로 조작된 사진은 인증할 수 없습니다.", HttpStatus.BAD_REQUEST),
+    STOLEN_IMAGE_DETECTED("VERIFY400_8", "인터넷 도용 사진으로 판별되어 현장 인증이 반려되었습니다.", HttpStatus.BAD_REQUEST),
+    INVALID_IMAGE_URL("VERIFY400_6", "허용되지 않거나 안전하지 않은 이미지 URL입니다.", HttpStatus.BAD_REQUEST),
+    REALTOR_GPS_NOT_MATCH("VERIFY400_9", "매물 위치 반경 100m를 벗어나 현장 인증이 반려되었습니다.", HttpStatus.BAD_REQUEST),
+    VISION_API_ERROR("VERIFY500_1", "이미지 검증 서버 통신에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+    OWNER_ALREADY_VERIFIED("VERIFY400_10", "이미 집주인 서류 인증이 완료된 매물입니다.", HttpStatus.BAD_REQUEST),
+    OWNER_VERIFICATION_IN_PROGRESS("VERIFY400_11", "현재 집주인 서류 인증이 처리 중입니다. 잠시 후 다시 확인해주세요.", HttpStatus.BAD_REQUEST),
+
+    // 관리자 검수 전용 에러 코드
+    VERIFICATION_NOT_FOUND("VERIFY404_1", "해당 서류 인증 내역을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    NOT_MANUAL_REVIEW_STATUS("VERIFY400_12", "수동 검수 대기(MANUAL_REVIEW) 상태의 내역만 처리할 수 있습니다.", HttpStatus.BAD_REQUEST);
+
+    private final String code;
+    private final String message;
+    private final HttpStatus httpStatus;
+}
