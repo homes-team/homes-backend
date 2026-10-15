@@ -39,7 +39,10 @@ public interface PropertyInsightControllerDocs {
      * @param travelTimeMinutes 이동시간(분)
      * @return GeoJSON 등시선도 응답
      */
-    @Operation(summary = "생활권 Isochrone 조회", description = "도보/차량 및 이동시간에 따른 GeoJSON Polygon을 반환합니다.")
+    @Operation(
+            summary = "생활권 Isochrone 조회",
+            description = "OpenStreetMap 도로망을 기준으로 도보/차량 및 이동시간에 따른 GeoJSON Polygon을 반환합니다."
+    )
     ApiResponse<IsochroneRespDto> getIsochrone(
             @Parameter(description = "매물 ID") @PathVariable Long propertyId,
             @Parameter(description = "walk 또는 drive", example = "walk") @RequestParam String mode,

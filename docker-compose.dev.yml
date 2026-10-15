@@ -7,11 +7,12 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
     depends_on:
-      - homes-postgres
+      homes-postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   homes-postgres:
-    image: postgres:15
+    image: pgrouting/pgrouting:15-3.5-3.8
     container_name: homes-postgres-dev
     environment:
       POSTGRES_USER: homes
@@ -22,3 +23,33 @@ services:
       - "5432:5432"
     volumes:
       - ./_vol/postgres:/var/lib/postgresql/data
+      - ./infra/routing/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homes -d homes_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  routing-import:
+    image: pgrouting/pgrouting-extra:15-3.5-3.8
+    profiles: ["routing-import"]
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    depends_on:
+      homes-postgres:
+        condition: service_healthy
+    volumes:
+      - ./routing-data:/data:ro
+    entrypoint: ["osm2pgrouting"]
+    command:
+      - --f
+      - /data/${OSM_PBF_FILE:-south-korea-latest.osm.pbf}
+      - --dbname
+      - homes_db
+      - --username
+      - homes
+      - --host
+      - homes-postgres
+      - --port
+      - "5432"
+      - --clean
