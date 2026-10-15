@@ -56,14 +56,12 @@ public interface StationRepository extends JpaRepository<Station, Long> {
             "ST_DistanceSphere(coordinate, :point) AS distance " +
             "FROM station " +
             "WHERE poi_type = :poiType " +
-            "AND ST_DWithin(coordinate, :point, :radiusDegrees) " +
-            "AND ST_DistanceSphere(coordinate, :point) <= :radiusMeters " +
+            "AND ST_DWithin(CAST(coordinate AS geography), CAST(:point AS geography), :radiusMeters) " +
             "ORDER BY distance ASC LIMIT :limit", nativeQuery = true)
     List<NearbyStationProjection> findNearbyByPoiType(
             @Param("point") Point point,
             @Param("poiType") String poiType,
             @Param("radiusMeters") double radiusMeters,
-            @Param("radiusDegrees") double radiusDegrees,
             @Param("limit") int limit
     );
 
