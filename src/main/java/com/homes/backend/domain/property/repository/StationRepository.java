@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.locationtech.jts.geom.Point;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface StationRepository extends JpaRepository<Station, Long> {
     /**
      * 주어진 Point와 가장 가까운 역을 미터(m) 단위 거리와 함께 1개 반환
@@ -44,6 +46,23 @@ public interface StationRepository extends JpaRepository<Station, Long> {
             @Param("poiType") String poiType,
             @Param("radiusMeters") double radiusMeters,
             @Param("radiusDegrees") double radiusDegrees
+    );
+
+    /**
+     * Finds nearby transportation POIs with coordinates for map markers.
+     */
+    @Query(value = "SELECT id AS id, poi_id AS poiId, poi_name AS poiName, poi_type AS poiType, " +
+            "ST_Y(coordinate) AS latitude, ST_X(coordinate) AS longitude, " +
+            "ST_DistanceSphere(coordinate, :point) AS distance " +
+            "FROM station " +
+            "WHERE poi_type = :poiType " +
+            "AND ST_DWithin(CAST(coordinate AS geography), CAST(:point AS geography), :radiusMeters) " +
+            "ORDER BY distance ASC LIMIT :limit", nativeQuery = true)
+    List<NearbyStationProjection> findNearbyByPoiType(
+            @Param("point") Point point,
+            @Param("poiType") String poiType,
+            @Param("radiusMeters") double radiusMeters,
+            @Param("limit") int limit
     );
 
     boolean existsByPoiType(String poiType);
