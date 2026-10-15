@@ -2,12 +2,16 @@ package com.homes.backend.domain.property.insight.controller;
 
 import com.homes.backend.domain.property.insight.dto.AiEvaluationRespDto;
 import com.homes.backend.domain.property.insight.dto.IsochroneRespDto;
+import com.homes.backend.domain.property.insight.dto.NearbyFacilitiesRespDto;
+import com.homes.backend.domain.property.insight.dto.NearbyFacilitiesRespDto.FacilityType;
 import com.homes.backend.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.Set;
 
 @Tag(name = "매물 AI·생활권 API", description = "매물 다면평가와 생활권 등시선도를 조회합니다.")
 public interface PropertyInsightControllerDocs {
@@ -40,5 +44,17 @@ public interface PropertyInsightControllerDocs {
             @Parameter(description = "매물 ID") @PathVariable Long propertyId,
             @Parameter(description = "walk 또는 drive", example = "walk") @RequestParam String mode,
             @Parameter(description = "5, 10, 15, 20, 30", example = "10") @RequestParam(name = "time") int travelTimeMinutes
+    );
+
+    @Operation(
+            summary = "주변 인프라 지도 데이터 조회",
+            description = "매물 주변의 지하철역, 버스정류장, 학교, 병원, 문화시설, 공원, 대형마트를 좌표와 거리로 반환합니다."
+    )
+    ApiResponse<NearbyFacilitiesRespDto> getNearbyFacilities(
+            @Parameter(description = "매물 ID") @PathVariable Long propertyId,
+            @Parameter(description = "조회 반경(100~5000m)", example = "2000")
+            @RequestParam(defaultValue = "2000") int radius,
+            @Parameter(description = "시설 유형 필터. 생략하면 전체")
+            @RequestParam(required = false) Set<FacilityType> types
     );
 }
