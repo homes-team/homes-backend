@@ -65,14 +65,3 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
-
-/**
- * QueryDSL Q-클래스 폴더를 소스 폴더로 영구 지정
-  */
-sourceSets {
-    main {
-        java {
-            srcDirs += [ 'build/generated/sources/annotationProcessor/java/main' ]
-        }
-    }
-}

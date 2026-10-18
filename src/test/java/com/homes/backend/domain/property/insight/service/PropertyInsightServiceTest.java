@@ -41,6 +41,7 @@ class PropertyInsightServiceTest {
     @Mock NationwideTransportScoreProvider nationwideTransportScoreProvider;
     @Mock PropertyBuildingInformationRepository buildingInformationRepository;
     @Mock AiEvaluationReportService evaluationReportService;
+    @Mock PgRoutingIsochroneProvider pgRoutingIsochroneProvider;
 
     private PropertyInsightService service;
     private Property property;
@@ -53,7 +54,7 @@ class PropertyInsightServiceTest {
         service = new PropertyInsightService(propertyRepository, evaluationRepository, dobongAiDataset,
                 nearbySchoolProvider, nearbyNatureProvider, nearbyInfrastructureProvider, nationwideTransportScoreProvider,
                 buildingInformationRepository,
-                new PropertyEvaluationScorePolicy(), evaluationReportService);
+                new PropertyEvaluationScorePolicy(), evaluationReportService, pgRoutingIsochroneProvider);
         Point point = new GeometryFactory().createPoint(new Coordinate(127.0471, 37.6688));
         point.setSRID(4326);
         property = Property.builder()
@@ -114,6 +115,8 @@ class PropertyInsightServiceTest {
                 .satisfies(category -> {
                     assertThat(category.status()).isEqualTo(AiEvaluationRespDto.ScoreStatus.AVAILABLE);
                     assertThat(category.evidence()).hasSize(2);
+                    assertThat(category.description()).contains("남향").doesNotContain("SOUTH");
+                    assertThat(category.evidence().getFirst().value()).isEqualTo("남향");
                     assertThat(category.calculation().policyVersion()).isEqualTo("PROPERTY_RULE_V2");
                 });
         assertThat(response.overall().rawScore()).isNull();
@@ -337,15 +340,31 @@ class PropertyInsightServiceTest {
     @Test
     void returnsClosedGeoJsonPolygonForSupportedIsochroneRequest() {
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        List<List<Double>> ring = List.of(
+                List.of(127.04, 37.66),
+                List.of(127.05, 37.66),
+                List.of(127.05, 37.67),
+                List.of(127.04, 37.66)
+        );
+        when(pgRoutingIsochroneProvider.calculate(
+                property.getCoordinate(), PgRoutingIsochroneProvider.Mode.WALK, 600))
+                .thenReturn(new PgRoutingIsochroneProvider.Result(ring, 123_456.7));
 
         IsochroneRespDto response = service.getIsochrone(1L, "walk", 10);
-        var ring = response.geometry().coordinates().getFirst();
+        var responseRing = response.geometry().coordinates().getFirst();
 
         assertThat(response.mode()).isEqualTo("walk");
-        assertThat(response.metadata().estimatedDistanceMeters()).isEqualTo(800);
-        assertThat(response.metadata().calculationMethod()).isEqualTo("VIRTUAL_RADIAL_POLYGON");
-        assertThat(ring).hasSize(37);
-        assertThat(ring.getFirst()).isEqualTo(ring.getLast());
+        assertThat(response.metadata().estimatedDistanceMeters()).isNull();
+        assertThat(response.metadata().calculationMethod()).isEqualTo("PGR_DRIVING_DISTANCE");
+        assertThat(response.metadata().dataSource()).isEqualTo("OPENSTREETMAP");
+        assertThat(response.metadata().cached()).isFalse();
+        assertThat(responseRing).isEqualTo(ring);
+        assertThat(responseRing.getFirst()).isEqualTo(responseRing.getLast());
+
+        IsochroneRespDto cachedResponse = service.getIsochrone(1L, "walk", 10);
+        assertThat(cachedResponse.metadata().cached()).isTrue();
+        verify(pgRoutingIsochroneProvider, times(1)).calculate(
+                property.getCoordinate(), PgRoutingIsochroneProvider.Mode.WALK, 600);
     }
 
     /**

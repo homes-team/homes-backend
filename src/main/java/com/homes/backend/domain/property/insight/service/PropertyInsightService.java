@@ -1,6 +1,9 @@
 package com.homes.backend.domain.property.insight.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.homes.backend.domain.property.entity.Property;
+import com.homes.backend.domain.property.entity.PropertyDirection;
 import com.homes.backend.domain.property.entity.PropertyOption;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
 import com.homes.backend.domain.property.building.entity.PropertyBuildingInformation;
@@ -17,6 +20,7 @@ import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.Year;
 import java.util.ArrayList;
@@ -31,7 +35,6 @@ import static com.homes.backend.domain.property.insight.dto.AiEvaluationRespDto.
 @Transactional(readOnly = true)
 public class PropertyInsightService {
     private static final List<Integer> SUPPORTED_TIMES = List.of(5, 10, 15, 20, 30);
-    private static final int POLYGON_VERTEX_COUNT = 36;
 
     private final PropertyRepository propertyRepository;
     private final PropertyAiEvaluationRepository evaluationRepository;
@@ -43,6 +46,11 @@ public class PropertyInsightService {
     private final PropertyBuildingInformationRepository buildingInformationRepository;
     private final PropertyEvaluationScorePolicy evaluationScorePolicy;
     private final AiEvaluationReportService evaluationReportService;
+    private final PgRoutingIsochroneProvider pgRoutingIsochroneProvider;
+    private final Cache<IsochroneCacheKey, CachedIsochrone> isochroneCache = Caffeine.newBuilder()
+            .maximumSize(2_000)
+            .expireAfterWrite(Duration.ofHours(24))
+            .build();
 
     /**
      * Builds the six-category AI evaluation for a property from stored or bundled data.
@@ -170,7 +178,7 @@ public class PropertyInsightService {
     }
 
     /**
-     * Builds a virtual isochrone polygon for a supported travel mode and duration.
+     * Builds a road-network isochrone polygon for a supported travel mode and duration.
      *
      * @param propertyId property identifier
      * @param requestedMode requested travel mode
@@ -189,26 +197,36 @@ public class PropertyInsightService {
             throw new CustomException(PropertyErrorCode.ISOCHRONE_COORDINATE_UNAVAILABLE);
         }
 
-        int metersPerMinute = mode.equals("walk") ? 80 : 350;
-        int distanceMeters = metersPerMinute * travelTimeMinutes;
         double latitude = coordinate.getY();
         double longitude = coordinate.getX();
-        List<List<Double>> ring = createVirtualRing(latitude, longitude, distanceMeters, propertyId);
-        double area = Math.PI * distanceMeters * distanceMeters;
+        PgRoutingIsochroneProvider.Mode routingMode = mode.equals("walk")
+                ? PgRoutingIsochroneProvider.Mode.WALK
+                : PgRoutingIsochroneProvider.Mode.DRIVE;
+        IsochroneCacheKey cacheKey = new IsochroneCacheKey(
+                propertyId, routingMode, travelTimeMinutes, latitude, longitude);
+        CachedIsochrone cached = isochroneCache.getIfPresent(cacheKey);
+        boolean cacheHit = cached != null;
+        if (cached == null) {
+            cached = isochroneCache.get(cacheKey, ignored -> {
+                PgRoutingIsochroneProvider.Result calculated = pgRoutingIsochroneProvider.calculate(
+                        coordinate, routingMode, travelTimeMinutes * 60);
+                return new CachedIsochrone(calculated, LocalDateTime.now());
+            });
+        }
 
         return new IsochroneRespDto(
                 propertyId,
                 mode,
                 travelTimeMinutes,
                 new IsochroneRespDto.Center(latitude, longitude),
-                new IsochroneRespDto.Geometry("Polygon", List.of(ring)),
+                new IsochroneRespDto.Geometry("Polygon", List.of(cached.result().ring())),
                 new IsochroneRespDto.Metadata(
-                        distanceMeters,
-                        Math.round(area * 10.0) / 10.0,
-                        "VIRTUAL_RADIAL_POLYGON",
-                        "PROPERTY_COORDINATE",
-                        false,
-                        LocalDateTime.now()
+                        null,
+                        Math.round(cached.result().areaSquareMeters() * 10.0) / 10.0,
+                        "PGR_DRIVING_DISTANCE",
+                        "OPENSTREETMAP",
+                        cacheHit,
+                        cached.generatedAt()
                 )
         );
     }
@@ -347,10 +365,10 @@ public class PropertyInsightService {
      */
     private String sunlightDescription(Property property) {
         if (property.getDirection() == null
-                || property.getDirection() == com.homes.backend.domain.property.entity.PropertyDirection.UNKNOWN) {
+                || property.getDirection() == PropertyDirection.UNKNOWN) {
             return "주실 방향 정보가 입력되면 현재 층수와 함께 평가에 반영됩니다.";
         }
-        return property.getDirection().name() + " 방향과 " + property.getCurrentFloor()
+        return property.getDirection().getDisplayName() + "과 " + property.getCurrentFloor()
                 + "/" + property.getTotalFloors() + "층 정보를 기준으로 산정한 점수입니다.";
     }
 
@@ -467,7 +485,7 @@ public class PropertyInsightService {
     ) {
         if (result == null) return List.of();
         return List.of(
-                new ScoreEvidence("MAIN_DIRECTION", "주실 방향", property.getDirection().name(), null,
+                new ScoreEvidence("MAIN_DIRECTION", "주실 방향", property.getDirection().getDisplayName(), null,
                         "방향별 기준 점수", result.directionScore(), "매물 입력 정보"),
                 new ScoreEvidence("RELATIVE_FLOOR", "현재 층/전체 층",
                         property.getCurrentFloor() + "/" + property.getTotalFloors(), "층",
@@ -617,28 +635,16 @@ public class PropertyInsightService {
                 strengths, weaknesses, notice);
     }
 
-    /**
-     * Creates a deterministic, closed radial polygon around a coordinate.
-     *
-     * @param latitude center latitude
-     * @param longitude center longitude
-     * @param radiusMeters nominal polygon radius in meters
-     * @param seed property-specific shape seed
-     * @return closed longitude-latitude coordinate ring
-     */
-    private List<List<Double>> createVirtualRing(double latitude, double longitude, int radiusMeters, long seed) {
-        double latitudeDegreePerMeter = 1.0 / 111_320.0;
-        double longitudeDegreePerMeter = 1.0 / (111_320.0 * Math.cos(Math.toRadians(latitude)));
-        List<List<Double>> ring = new ArrayList<>();
-        for (int i = 0; i < POLYGON_VERTEX_COUNT; i++) {
-            double angle = Math.PI * 2 * i / POLYGON_VERTEX_COUNT;
-            double variation = 0.82 + 0.12 * Math.sin(angle * 3 + seed % 7) + 0.06 * Math.cos(angle * 5);
-            double radius = radiusMeters * variation;
-            double lat = latitude + Math.sin(angle) * radius * latitudeDegreePerMeter;
-            double lng = longitude + Math.cos(angle) * radius * longitudeDegreePerMeter;
-            ring.add(List.of(lng, lat));
-        }
-        ring.add(ring.getFirst());
-        return ring;
-    }
+    private record IsochroneCacheKey(
+            Long propertyId,
+            PgRoutingIsochroneProvider.Mode mode,
+            int travelTimeMinutes,
+            double latitude,
+            double longitude
+    ) {}
+
+    private record CachedIsochrone(
+            PgRoutingIsochroneProvider.Result result,
+            LocalDateTime generatedAt
+    ) {}
 }
