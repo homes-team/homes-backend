@@ -48,3 +48,10 @@ services:
       - ./routing-data:/data:ro
       - ./infra/routing/import-osm.sh:/opt/routing/import-osm.sh:ro
     entrypoint: ["/bin/sh", "/opt/routing/import-osm.sh"]
+
+    homes-redis:
+      image: redis:7-alpine
+      container_name: homes-redis
+      ports:
+        - "6379:6379"
+      restart: unless-stopped
