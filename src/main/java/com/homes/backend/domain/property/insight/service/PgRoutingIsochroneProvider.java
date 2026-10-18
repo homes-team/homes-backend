@@ -22,7 +22,9 @@ public class PgRoutingIsochroneProvider {
     private static final double DRIVE_RADIUS_DEGREES_PER_TEN_MINUTES = 0.10;
     private static final double MAX_EDGE_RADIUS_DEGREES = 0.60;
     private static final int MAX_RADIUS_EXPANSIONS = 3;
-    private static final int HULL_GRID_SIZE_METERS = 200;
+    private static final int WALK_HULL_GRID_SIZE_METERS = 50;
+    private static final int DRIVE_HULL_GRID_SIZE_METERS = 200;
+    private static final int QUERY_TIMEOUT_SECONDS = 30;
     private static final String WALK_EDGE_SQL_TEMPLATE = """
             SELECT id, source, target,
                    CASE WHEN tag_id IN (101, 102, 104, 105) THEN -1 ELSE length_m / 1.4 END AS cost,
@@ -84,11 +86,11 @@ public class PgRoutingIsochroneProvider {
                 FROM hull
             )
             SELECT ST_AsGeoJSON(ST_Transform(geometry, 4326)) AS geojson,
-                   ST_Area(geometry) AS area_square_meters,
+                   ST_Area(CAST(ST_Transform(geometry, 4326) AS geography)) AS area_square_meters,
                    boundary_reached
             FROM polygon
             WHERE geometry IS NOT NULL
-            """.replace("__HULL_GRID_SIZE_METERS__", Integer.toString(HULL_GRID_SIZE_METERS));
+            """;
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
@@ -120,17 +122,32 @@ public class PgRoutingIsochroneProvider {
                 Double.toString(center.getY()),
                 Double.toString(radiusDegrees)
         );
-        String sql = ISOCHRONE_SQL_TEMPLATE.formatted(edgeSql.replace("'", "''"));
+        int hullGridSizeMeters = mode == Mode.WALK
+                ? WALK_HULL_GRID_SIZE_METERS
+                : DRIVE_HULL_GRID_SIZE_METERS;
+        String sql = ISOCHRONE_SQL_TEMPLATE
+                .replace("__HULL_GRID_SIZE_METERS__", Integer.toString(hullGridSizeMeters))
+                .formatted(edgeSql.replace("'", "''"));
         double boundaryThreshold = radiusDegrees * 0.9;
         List<QueryResult> results = jdbcTemplate.query(
                 sql,
+                statement -> {
+                    statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                    statement.setDouble(1, center.getX());
+                    statement.setDouble(2, center.getY());
+                    statement.setDouble(3, center.getX());
+                    statement.setDouble(4, center.getY());
+                    statement.setInt(5, travelTimeSeconds);
+                    statement.setDouble(6, center.getX());
+                    statement.setDouble(7, boundaryThreshold);
+                    statement.setDouble(8, center.getY());
+                    statement.setDouble(9, boundaryThreshold);
+                },
                 (resultSet, rowNumber) -> new QueryResult(
                         parseExteriorRing(resultSet.getString("geojson")),
                         resultSet.getDouble("area_square_meters"),
                         resultSet.getBoolean("boundary_reached")
-                ),
-                center.getX(), center.getY(), center.getX(), center.getY(), travelTimeSeconds,
-                center.getX(), boundaryThreshold, center.getY(), boundaryThreshold
+                )
         );
         if (results.isEmpty()) throw routingUnavailable(null);
         return results.getFirst();
