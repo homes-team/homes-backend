@@ -162,7 +162,7 @@ public class AiEvaluationReportService {
         propertyInput.put("currentFloor", property.getCurrentFloor());
         propertyInput.put("totalFloors", property.getTotalFloors());
         propertyInput.put("direction", property.getDirection() == null
-                ? null : property.getDirection().name());
+                ? null : property.getDirection().getDisplayName());
         propertyInput.put("remodelingYear", property.getRemodelingYear());
 
         List<Map<String, Object>> categoryInputs = categories.stream().map(category -> {

@@ -35,21 +35,16 @@ services:
     profiles: ["routing-import"]
     environment:
       PGPASSWORD: ${DB_PASSWORD}
+      ROUTING_DB_HOST: ${ROUTING_DB_HOST:-homes-postgres}
+      ROUTING_DB_PORT: ${ROUTING_DB_PORT:-5432}
+      ROUTING_DB_NAME: ${ROUTING_DB_NAME:-homes_db}
+      ROUTING_DB_USER: ${ROUTING_DB_USER:-homes}
+      OSM_INPUT_FILE: ${OSM_INPUT_FILE:-south-korea-highways.osm}
+      ROUTING_IMPORT_CLEAN: ${ROUTING_IMPORT_CLEAN:-true}
     depends_on:
       homes-postgres:
         condition: service_healthy
     volumes:
       - ./routing-data:/data:ro
-    entrypoint: ["osm2pgrouting"]
-    command:
-      - --f
-      - /data/${OSM_PBF_FILE:-south-korea-latest.osm.pbf}
-      - --dbname
-      - homes_db
-      - --username
-      - homes
-      - --host
-      - homes-postgres
-      - --port
-      - "5432"
-      - --clean
+      - ./infra/routing/import-osm.sh:/opt/routing/import-osm.sh:ro
+    entrypoint: ["/bin/sh", "/opt/routing/import-osm.sh"]

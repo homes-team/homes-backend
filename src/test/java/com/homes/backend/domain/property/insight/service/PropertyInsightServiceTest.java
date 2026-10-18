@@ -115,6 +115,8 @@ class PropertyInsightServiceTest {
                 .satisfies(category -> {
                     assertThat(category.status()).isEqualTo(AiEvaluationRespDto.ScoreStatus.AVAILABLE);
                     assertThat(category.evidence()).hasSize(2);
+                    assertThat(category.description()).contains("남향").doesNotContain("SOUTH");
+                    assertThat(category.evidence().getFirst().value()).isEqualTo("남향");
                     assertThat(category.calculation().policyVersion()).isEqualTo("PROPERTY_RULE_V2");
                 });
         assertThat(response.overall().rawScore()).isNull();

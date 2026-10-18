@@ -3,6 +3,7 @@ package com.homes.backend.domain.property.insight.service;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.homes.backend.domain.property.entity.Property;
+import com.homes.backend.domain.property.entity.PropertyDirection;
 import com.homes.backend.domain.property.entity.PropertyOption;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
 import com.homes.backend.domain.property.building.entity.PropertyBuildingInformation;
@@ -48,7 +49,7 @@ public class PropertyInsightService {
     private final PgRoutingIsochroneProvider pgRoutingIsochroneProvider;
     private final Cache<IsochroneCacheKey, CachedIsochrone> isochroneCache = Caffeine.newBuilder()
             .maximumSize(2_000)
-            .expireAfterWrite(Duration.ofHours(1))
+            .expireAfterWrite(Duration.ofHours(24))
             .build();
 
     /**
@@ -206,10 +207,11 @@ public class PropertyInsightService {
         CachedIsochrone cached = isochroneCache.getIfPresent(cacheKey);
         boolean cacheHit = cached != null;
         if (cached == null) {
-            PgRoutingIsochroneProvider.Result calculated = pgRoutingIsochroneProvider.calculate(
-                    coordinate, routingMode, travelTimeMinutes * 60);
-            cached = new CachedIsochrone(calculated, LocalDateTime.now());
-            isochroneCache.put(cacheKey, cached);
+            cached = isochroneCache.get(cacheKey, ignored -> {
+                PgRoutingIsochroneProvider.Result calculated = pgRoutingIsochroneProvider.calculate(
+                        coordinate, routingMode, travelTimeMinutes * 60);
+                return new CachedIsochrone(calculated, LocalDateTime.now());
+            });
         }
 
         return new IsochroneRespDto(
@@ -363,10 +365,10 @@ public class PropertyInsightService {
      */
     private String sunlightDescription(Property property) {
         if (property.getDirection() == null
-                || property.getDirection() == com.homes.backend.domain.property.entity.PropertyDirection.UNKNOWN) {
+                || property.getDirection() == PropertyDirection.UNKNOWN) {
             return "주실 방향 정보가 입력되면 현재 층수와 함께 평가에 반영됩니다.";
         }
-        return property.getDirection().name() + " 방향과 " + property.getCurrentFloor()
+        return property.getDirection().getDisplayName() + "과 " + property.getCurrentFloor()
                 + "/" + property.getTotalFloors() + "층 정보를 기준으로 산정한 점수입니다.";
     }
 
@@ -483,7 +485,7 @@ public class PropertyInsightService {
     ) {
         if (result == null) return List.of();
         return List.of(
-                new ScoreEvidence("MAIN_DIRECTION", "주실 방향", property.getDirection().name(), null,
+                new ScoreEvidence("MAIN_DIRECTION", "주실 방향", property.getDirection().getDisplayName(), null,
                         "방향별 기준 점수", result.directionScore(), "매물 입력 정보"),
                 new ScoreEvidence("RELATIVE_FLOOR", "현재 층/전체 층",
                         property.getCurrentFloor() + "/" + property.getTotalFloors(), "층",

@@ -18,26 +18,33 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class PgRoutingIsochroneProvider {
-    private static final String WALK_EDGE_SQL = """
-            SELECT gid AS id, source, target,
-                   CASE WHEN class_id IN (101, 102, 104, 105) THEN -1 ELSE length_m / 1.4 END AS cost,
-                   CASE WHEN class_id IN (101, 102, 104, 105) THEN -1 ELSE length_m / 1.4 END AS reverse_cost
+    private static final double WALK_BASE_RADIUS_DEGREES = 0.02;
+    private static final double DRIVE_RADIUS_DEGREES_PER_TEN_MINUTES = 0.10;
+    private static final double MAX_EDGE_RADIUS_DEGREES = 0.60;
+    private static final int MAX_RADIUS_EXPANSIONS = 3;
+    private static final int HULL_GRID_SIZE_METERS = 200;
+    private static final String WALK_EDGE_SQL_TEMPLATE = """
+            SELECT id, source, target,
+                   CASE WHEN tag_id IN (101, 102, 104, 105) THEN -1 ELSE length_m / 1.4 END AS cost,
+                   CASE WHEN tag_id IN (101, 102, 104, 105) THEN -1 ELSE length_m / 1.4 END AS reverse_cost
             FROM ways
+            WHERE geom && ST_Expand(ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s)
             """;
-    private static final String DRIVE_EDGE_SQL = """
-            SELECT gid AS id, source, target, cost_s AS cost, reverse_cost_s AS reverse_cost
+    private static final String DRIVE_EDGE_SQL_TEMPLATE = """
+            SELECT id, source, target, cost_s AS cost, reverse_cost_s AS reverse_cost
             FROM ways
+            WHERE geom && ST_Expand(ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s)
             """;
     private static final String ISOCHRONE_SQL_TEMPLATE = """
             WITH origin AS (
                 SELECT id
                 FROM ways_vertices_pgr
                 WHERE ST_DWithin(
-                    CAST(the_geom AS geography),
+                    CAST(geom AS geography),
                     CAST(ST_SetSRID(ST_MakePoint(?, ?), 4326) AS geography),
                     1000
                 )
-                ORDER BY the_geom <-> ST_SetSRID(ST_MakePoint(?, ?), 4326)
+                ORDER BY geom <-> ST_SetSRID(ST_MakePoint(?, ?), 4326)
                 LIMIT 1
             ),
             reachable AS (
@@ -51,12 +58,20 @@ public class PgRoutingIsochroneProvider {
                 ) AS route
             ),
             point_cloud AS (
-                SELECT ST_Collect(ST_Transform(vertex.the_geom, 3857)) AS geometry
+                SELECT ST_Collect(DISTINCT ST_SnapToGrid(
+                           ST_Transform(vertex.geom, 3857),
+                           __HULL_GRID_SIZE_METERS__
+                       )) AS geometry,
+                       COALESCE(BOOL_OR(
+                           ABS(ST_X(vertex.geom) - ?) >= ?
+                           OR ABS(ST_Y(vertex.geom) - ?) >= ?
+                       ), false) AS boundary_reached
                 FROM ways_vertices_pgr vertex
                 JOIN reachable ON reachable.node = vertex.id
             ),
             hull AS (
-                SELECT ST_ConcaveHull(geometry, 0.30, false) AS geometry
+                SELECT ST_ConcaveHull(geometry, 0.30, false) AS geometry,
+                       boundary_reached
                 FROM point_cloud
                 WHERE geometry IS NOT NULL
             ),
@@ -64,39 +79,71 @@ public class PgRoutingIsochroneProvider {
                 SELECT CASE
                     WHEN GeometryType(geometry) = 'POLYGON' THEN geometry
                     ELSE ST_Buffer(geometry, 30)
-                END AS geometry
+                END AS geometry,
+                boundary_reached
                 FROM hull
             )
             SELECT ST_AsGeoJSON(ST_Transform(geometry, 4326)) AS geojson,
-                   ST_Area(geometry) AS area_square_meters
+                   ST_Area(geometry) AS area_square_meters,
+                   boundary_reached
             FROM polygon
             WHERE geometry IS NOT NULL
-            """;
+            """.replace("__HULL_GRID_SIZE_METERS__", Integer.toString(HULL_GRID_SIZE_METERS));
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
     public Result calculate(Point center, Mode mode, int travelTimeSeconds) {
-        String edgeSql = mode == Mode.WALK ? WALK_EDGE_SQL : DRIVE_EDGE_SQL;
-        String sql = ISOCHRONE_SQL_TEMPLATE.formatted(edgeSql.replace("'", "''"));
         try {
-            List<Result> results = jdbcTemplate.query(
-                    sql,
-                    (resultSet, rowNumber) -> new Result(
-                            parseExteriorRing(resultSet.getString("geojson")),
-                            resultSet.getDouble("area_square_meters")
-                    ),
-                    center.getX(), center.getY(), center.getX(), center.getY(), travelTimeSeconds
-            );
-            if (results.isEmpty() || results.getFirst().ring().size() < 4) {
-                throw routingUnavailable(null);
+            double radiusDegrees = initialRadiusDegrees(mode, travelTimeSeconds);
+            QueryResult calculated = null;
+            for (int attempt = 0; attempt < MAX_RADIUS_EXPANSIONS; attempt++) {
+                calculated = execute(center, mode, travelTimeSeconds, radiusDegrees);
+                if (!calculated.boundaryReached() || radiusDegrees >= MAX_EDGE_RADIUS_DEGREES) {
+                    break;
+                }
+                radiusDegrees = Math.min(radiusDegrees * 2, MAX_EDGE_RADIUS_DEGREES);
             }
-            return results.getFirst();
+            if (calculated == null || calculated.ring().size() < 4) throw routingUnavailable(null);
+            return new Result(calculated.ring(), calculated.areaSquareMeters());
         } catch (CustomException exception) {
             throw exception;
         } catch (DataAccessException exception) {
             throw routingUnavailable(exception);
         }
+    }
+
+    private QueryResult execute(Point center, Mode mode, int travelTimeSeconds, double radiusDegrees) {
+        String edgeSqlTemplate = mode == Mode.WALK ? WALK_EDGE_SQL_TEMPLATE : DRIVE_EDGE_SQL_TEMPLATE;
+        String edgeSql = edgeSqlTemplate.formatted(
+                Double.toString(center.getX()),
+                Double.toString(center.getY()),
+                Double.toString(radiusDegrees)
+        );
+        String sql = ISOCHRONE_SQL_TEMPLATE.formatted(edgeSql.replace("'", "''"));
+        double boundaryThreshold = radiusDegrees * 0.9;
+        List<QueryResult> results = jdbcTemplate.query(
+                sql,
+                (resultSet, rowNumber) -> new QueryResult(
+                        parseExteriorRing(resultSet.getString("geojson")),
+                        resultSet.getDouble("area_square_meters"),
+                        resultSet.getBoolean("boundary_reached")
+                ),
+                center.getX(), center.getY(), center.getX(), center.getY(), travelTimeSeconds,
+                center.getX(), boundaryThreshold, center.getY(), boundaryThreshold
+        );
+        if (results.isEmpty()) throw routingUnavailable(null);
+        return results.getFirst();
+    }
+
+    private double initialRadiusDegrees(Mode mode, int travelTimeSeconds) {
+        if (mode == Mode.WALK) {
+            return Math.max(WALK_BASE_RADIUS_DEGREES, WALK_BASE_RADIUS_DEGREES * travelTimeSeconds / 600.0);
+        }
+        return Math.max(
+                DRIVE_RADIUS_DEGREES_PER_TEN_MINUTES / 2,
+                DRIVE_RADIUS_DEGREES_PER_TEN_MINUTES * travelTimeSeconds / 600.0
+        );
     }
 
     List<List<Double>> parseExteriorRing(String geoJson) {
@@ -132,4 +179,6 @@ public class PgRoutingIsochroneProvider {
     }
 
     public record Result(List<List<Double>> ring, double areaSquareMeters) {}
+
+    private record QueryResult(List<List<Double>> ring, double areaSquareMeters, boolean boundaryReached) {}
 }
