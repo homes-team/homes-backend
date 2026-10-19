@@ -100,7 +100,8 @@ class AiEvaluationReportServiceTest {
         assertThat(captor.getValue().getInputHash()).hasSize(64);
         ArgumentCaptor<String> inputCaptor = ArgumentCaptor.forClass(String.class);
         verify(generator).generate(inputCaptor.capture());
-        assertThat(inputCaptor.getValue()).contains("evidence", "calculation", "POLICY_TEST_V1");
+        assertThat(inputCaptor.getValue())
+                .contains("evidence", "calculation", "POLICY_TEST_V1", "\"direction\":\"남향\"");
     }
 
     @Test

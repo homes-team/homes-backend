@@ -7,11 +7,12 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
     depends_on:
-      - homes-postgres
+      homes-postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   homes-postgres:
-    image: postgres:15
+    image: pgrouting/pgrouting:15-3.5-3.8
     container_name: homes-postgres-dev
     environment:
       POSTGRES_USER: homes
@@ -22,6 +23,31 @@ services:
       - "5432:5432"
     volumes:
       - ./_vol/postgres:/var/lib/postgresql/data
+      - ./infra/routing/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homes -d homes_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  routing-import:
+    image: pgrouting/pgrouting-extra:15-3.5-3.8
+    profiles: ["routing-import"]
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+      ROUTING_DB_HOST: ${ROUTING_DB_HOST:-homes-postgres}
+      ROUTING_DB_PORT: ${ROUTING_DB_PORT:-5432}
+      ROUTING_DB_NAME: ${ROUTING_DB_NAME:-homes_db}
+      ROUTING_DB_USER: ${ROUTING_DB_USER:-homes}
+      OSM_INPUT_FILE: ${OSM_INPUT_FILE:-south-korea-highways.osm}
+      ROUTING_IMPORT_CLEAN: ${ROUTING_IMPORT_CLEAN:-true}
+    depends_on:
+      homes-postgres:
+        condition: service_healthy
+    volumes:
+      - ./routing-data:/data:ro
+      - ./infra/routing/import-osm.sh:/opt/routing/import-osm.sh:ro
+    entrypoint: ["/bin/sh", "/opt/routing/import-osm.sh"]
 
     homes-redis:
       image: redis:7-alpine
