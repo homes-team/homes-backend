@@ -1,5 +1,7 @@
 package com.homes.backend.domain.user.controller;
 
+import com.homes.backend.domain.bid.dto.response.ReceivedBidListRespDto;
+import com.homes.backend.domain.bid.service.BidService;
 import com.homes.backend.domain.property.dto.response.PropertyListRespDto;
 import com.homes.backend.domain.property.dto.response.ReportListRespDto;
 import com.homes.backend.domain.property.service.PropertyReportService;
@@ -34,6 +36,7 @@ public class UserController implements UserControllerDocs {
     private final PropertyService propertyService;
     private final PropertyReportService propertyReportService;
     private final RecentViewService recentViewService;
+    private final BidService bidService;
 
     @Override
     @PostMapping("/signup")
@@ -116,6 +119,19 @@ public class UserController implements UserControllerDocs {
     ) {
         TokenDto tokenDto = userService.refresh(refreshToken);
         return ApiResponse.onSuccess(tokenDto);
+    }
+
+    @Override
+    @GetMapping("/me/bids")
+    public ApiResponse<List<ReceivedBidListRespDto>> getMyReceivedBids(
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        if (userPrincipal == null) {
+            throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
+        }
+
+        List<ReceivedBidListRespDto> response = bidService.getMyReceivedBids(userPrincipal.getId());
+        return ApiResponse.onSuccess(response);
     }
 
     @Override

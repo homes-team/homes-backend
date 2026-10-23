@@ -4,6 +4,7 @@ import com.homes.backend.domain.bid.dto.request.BidCreateReqDto;
 import com.homes.backend.domain.bid.dto.request.NegotiationReqDto;
 import com.homes.backend.domain.bid.dto.response.BidListRespDto;
 import com.homes.backend.domain.bid.dto.response.NegotiationListResDto;
+import com.homes.backend.domain.bid.dto.response.ReceivedBidListRespDto;
 import com.homes.backend.domain.bid.entity.Bid;
 import com.homes.backend.domain.bid.entity.BidStatus;
 import com.homes.backend.domain.bid.entity.Negotiation;
@@ -86,6 +87,15 @@ public class BidService {
                         propertyId, List.of(BidStatus.PENDING, BidStatus.ACCEPTED))
                 .stream()
                 .map(BidListRespDto::from)
+                .toList();
+    }
+
+    /**
+     * 유저 마이페이지 - 내가 소유한 모든 매물에 걸쳐 받은 입찰 제안서 목록 (매물 구분 없이 전체 이력, 최신순)
+     */
+    public List<ReceivedBidListRespDto> getMyReceivedBids(Long userId) {
+        return bidRepository.findAllByPropertyUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(ReceivedBidListRespDto::from)
                 .toList();
     }
 
