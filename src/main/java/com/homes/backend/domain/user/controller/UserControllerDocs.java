@@ -1,5 +1,6 @@
 package com.homes.backend.domain.user.controller;
 
+import com.homes.backend.domain.bid.dto.response.ReceivedBidListRespDto;
 import com.homes.backend.domain.property.dto.response.PropertyListRespDto;
 import com.homes.backend.domain.property.dto.response.ReportListRespDto;
 import com.homes.backend.domain.user.dto.request.*;
@@ -70,6 +71,12 @@ public interface UserControllerDocs {
     ApiResponse<TokenDto> refresh(
             @Parameter(description = "Bearer 가 포함된 Refresh Token을 실어주세요.", required = true)
             @RequestHeader("RefreshToken") String refreshToken
+    );
+
+    @Operation(summary = "내가 받은 입찰 제안서 목록", description = "현재 로그인한 유저가 소유한 모든 매물에 걸쳐 받은 입찰 제안서를, 매물 구분 없이 전체 이력(최신순)으로 조회합니다.")
+    @GetMapping("/me/bids")
+    ApiResponse<List<ReceivedBidListRespDto>> getMyReceivedBids(
+            @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal
     );
 
     @Operation(summary = "내가 찜한 매물 확인", description = "현재 로그인한 유저가 찜한 매물 리스트를 조회합니다.")

@@ -105,4 +105,10 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
      */
     @EntityGraph(attributePaths = {"property"})
     List<Bid> findAllByAgentIdOrderByCreatedAtDesc(Long agentId);
+
+    /**
+     * 유저 마이페이지 - 내가 소유한 모든 매물에 걸쳐 받은 입찰 제안서 목록 (매물 구분 없이 전체 이력, 최신순)
+     */
+    @EntityGraph(attributePaths = {"property", "agent"})
+    List<Bid> findAllByPropertyUserIdOrderByCreatedAtDesc(Long propertyUserId);
 }
