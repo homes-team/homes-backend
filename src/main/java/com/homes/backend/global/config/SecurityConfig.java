@@ -116,7 +116,8 @@ public class SecurityConfig {
                                 "/users/check-email",
                                 "/users/emails/**",
                                 "/users/refresh",
-                                "/users/realtors"
+                                "/users/realtors",
+                                "/realtors/presigned-url"
                         ).permitAll()
 
                         // 웹소켓 핸드셰이크: Authorization 헤더를 못 붙이는 요청이라 WebSocketHandshakeInterceptor가 1회용 티켓으로 자체 인증함
@@ -146,9 +147,7 @@ public class SecurityConfig {
                                 "/properties/surge-rankings",
                                 "/properties/*/verifications",
                                 "/properties/infrastructure",
-                                "/seed-images/**",
-                                // 중개사 회원가입(계정/토큰이 아직 없는 상태)에서도 서류 이미지를 미리 업로드해야 해서 로그인 없이 허용
-                                "/properties/presigned-url"
+                                "/seed-images/**"
                         ).permitAll()
 
                         // Swagger 관련 프리패스 주소 (이건 기존 yml 설정에 맞게 유지)
