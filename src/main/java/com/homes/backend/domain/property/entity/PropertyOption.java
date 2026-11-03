@@ -21,7 +21,12 @@ public enum PropertyOption {
     CLOSET("옷장"),
     SINK("싱크대"),
     VERANDA("베란다"),
-    FULL_OPTION("풀옵션");
+    FULL_OPTION("풀옵션"),
+    ENTRANCE_SECURITY("현관보안"),
+    CCTV("CCTV"),
+    FIRE_ALARM("화재경보기"),
+    BATHTUB("욕조"),
+    INTERPHONE("인터폰");
 
     private final String description;
 }
