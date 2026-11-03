@@ -64,7 +64,7 @@ public class RealtorController implements RealtorControllerDocs {
     }
 
     private void checkRateLimit(String clientIp) {
-        String key = "PRESIGN_RATE:" + clientIp;
+        String key = "PRESIGN_RATE:AGENT:" + clientIp;
         Long requestCount = redisTemplate.opsForValue().increment(key);
 
         if (requestCount != null && requestCount == 1L) {
