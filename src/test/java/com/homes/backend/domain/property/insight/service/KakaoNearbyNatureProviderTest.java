@@ -22,8 +22,10 @@ class KakaoNearbyNatureProviderTest {
         server.expect(requestTo(containsString("query=%EA%B3%B5%EC%9B%90")))
                 .andExpect(requestTo(containsString("radius=2000")))
                 .andRespond(withSuccess("""
-                        {"meta":{"total_count":7},"documents":[
-                          {"place_name":"테스트근린공원","distance":"350"}
+                        {"meta":{"total_count":8},"documents":[
+                          {"place_name":"공원아파트","category_name":"부동산 > 주거시설 > 아파트","distance":"20"},
+                          {"place_name":"테스트근린공원","category_name":"여행 > 관광,명소 > 공원","distance":"350"},
+                          {"place_name":"테스트어린이공원","category_name":"여행 > 관광,명소 > 공원","distance":"500"}
                         ]}
                         """, MediaType.APPLICATION_JSON));
         KakaoNearbyNatureProvider provider =
@@ -32,11 +34,11 @@ class KakaoNearbyNatureProviderTest {
         var result = provider.evaluate(new GeometryFactory()
                 .createPoint(new Coordinate(127.0471, 37.6688))).orElseThrow();
 
-        assertThat(result.score()).isEqualTo(80.5);
-        assertThat(result.description()).contains("테스트근린공원", "350m", "7곳");
+        assertThat(result.score()).isEqualTo(65.5);
+        assertThat(result.description()).contains("테스트근린공원", "350m", "2곳");
         assertThat(result.evidence()).extracting(evidence -> evidence.code())
                 .containsExactly("NEAREST_PARK_DISTANCE", "PARK_COUNT_WITHIN_2KM");
-        assertThat(result.calculation().policyVersion()).isEqualTo("NATIONWIDE_NATURE_V1");
+        assertThat(result.calculation().policyVersion()).isEqualTo("NATIONWIDE_NATURE_V2");
         server.verify();
     }
 
@@ -56,6 +58,32 @@ class KakaoNearbyNatureProviderTest {
 
         assertThat(result.score()).isEqualTo(14.0);
         assertThat(result.description()).contains("확인된 공원이 없습니다");
+        server.verify();
+    }
+
+    @Test
+    void continuesNatureSearchPastNonParkKeywordMatches() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo(containsString("page=1")))
+                .andRespond(withSuccess("""
+                        {"meta":{"is_end":false},"documents":[
+                          {"place_name":"공원아파트","category_name":"부동산 > 주거시설 > 아파트","distance":"20"}
+                        ]}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(containsString("page=2")))
+                .andRespond(withSuccess("""
+                        {"meta":{"is_end":true},"documents":[
+                          {"place_name":"초안산근린공원","category_name":"여행 > 관광,명소 > 공원","distance":"450"}
+                        ]}
+                        """, MediaType.APPLICATION_JSON));
+        KakaoNearbyNatureProvider provider =
+                new KakaoNearbyNatureProvider(restTemplate, new ObjectMapper(), "test-key");
+
+        var result = provider.evaluate(new GeometryFactory()
+                .createPoint(new Coordinate(127.0471, 37.6688))).orElseThrow();
+
+        assertThat(result.description()).contains("초안산근린공원", "1곳");
         server.verify();
     }
 }

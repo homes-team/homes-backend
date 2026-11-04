@@ -1,6 +1,7 @@
 package com.homes.backend.domain.property.building.service;
 
 import com.homes.backend.domain.property.building.event.BuildingInformationCollectionRequestedEvent;
+import com.homes.backend.domain.property.building.dto.BuildingInformationRespDto;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
 import com.homes.backend.global.exception.CustomException;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +41,16 @@ public class PropertyBuildingInformationAutoLoadService {
         if (informationService.prepareAutomaticCollection(propertyId)) {
             submit(propertyId);
         }
+    }
+
+    /**
+     * Queues a public manual request into the same per-property state machine and bounded executor as auto-loading.
+     */
+    public BuildingInformationRespDto requestCollection(Long propertyId) {
+        if (informationService.prepareAutomaticCollection(propertyId)) {
+            submit(propertyId);
+        }
+        return informationService.get(propertyId);
     }
 
     @EventListener(ApplicationReadyEvent.class)

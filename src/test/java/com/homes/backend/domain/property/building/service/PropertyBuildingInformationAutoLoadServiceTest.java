@@ -1,6 +1,7 @@
 package com.homes.backend.domain.property.building.service;
 
 import com.homes.backend.domain.property.building.event.BuildingInformationCollectionRequestedEvent;
+import com.homes.backend.domain.property.building.dto.BuildingInformationRespDto;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
 import com.homes.backend.global.exception.CustomException;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 class PropertyBuildingInformationAutoLoadServiceTest {
@@ -82,6 +84,21 @@ class PropertyBuildingInformationAutoLoadServiceTest {
                 new PropertyBuildingInformationAutoLoadService(informationService, rejectingExecutor);
 
         autoLoadService.handle(new BuildingInformationCollectionRequestedEvent(21L));
+
+        verify(informationService).prepareAutomaticCollection(21L);
+        verify(informationService, never()).claimAutomaticCollection(anyLong());
+    }
+
+    @Test
+    void coalescesPublicRequestWhenPropertyCollectionIsAlreadyQueued() {
+        PropertyBuildingInformationService informationService = mock(PropertyBuildingInformationService.class);
+        BuildingInformationRespDto pending = BuildingInformationRespDto.notCollected(21L);
+        when(informationService.prepareAutomaticCollection(21L)).thenReturn(false);
+        when(informationService.get(21L)).thenReturn(pending);
+        PropertyBuildingInformationAutoLoadService autoLoadService =
+                new PropertyBuildingInformationAutoLoadService(informationService, Runnable::run);
+
+        assertThat(autoLoadService.requestCollection(21L)).isSameAs(pending);
 
         verify(informationService).prepareAutomaticCollection(21L);
         verify(informationService, never()).claimAutomaticCollection(anyLong());
