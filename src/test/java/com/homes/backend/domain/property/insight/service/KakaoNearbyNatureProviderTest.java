@@ -60,4 +60,30 @@ class KakaoNearbyNatureProviderTest {
         assertThat(result.description()).contains("확인된 공원이 없습니다");
         server.verify();
     }
+
+    @Test
+    void continuesNatureSearchPastNonParkKeywordMatches() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server.expect(requestTo(containsString("page=1")))
+                .andRespond(withSuccess("""
+                        {"meta":{"is_end":false},"documents":[
+                          {"place_name":"공원아파트","category_name":"부동산 > 주거시설 > 아파트","distance":"20"}
+                        ]}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(containsString("page=2")))
+                .andRespond(withSuccess("""
+                        {"meta":{"is_end":true},"documents":[
+                          {"place_name":"초안산근린공원","category_name":"여행 > 관광,명소 > 공원","distance":"450"}
+                        ]}
+                        """, MediaType.APPLICATION_JSON));
+        KakaoNearbyNatureProvider provider =
+                new KakaoNearbyNatureProvider(restTemplate, new ObjectMapper(), "test-key");
+
+        var result = provider.evaluate(new GeometryFactory()
+                .createPoint(new Coordinate(127.0471, 37.6688))).orElseThrow();
+
+        assertThat(result.description()).contains("초안산근린공원", "1곳");
+        server.verify();
+    }
 }

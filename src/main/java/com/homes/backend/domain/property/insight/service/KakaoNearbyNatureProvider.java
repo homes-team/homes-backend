@@ -30,6 +30,9 @@ public class KakaoNearbyNatureProvider {
     static final String POLICY_VERSION = "NATIONWIDE_NATURE_V2";
     private static final String SEARCH_URL = "https://dapi.kakao.com/v2/local/search/keyword.json";
     private static final int RADIUS_METERS = 2_000;
+    private static final int PAGE_SIZE = 15;
+    private static final int PARK_COUNT_LIMIT = 10;
+    private static final int MAX_PAGE = 45;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -60,28 +63,20 @@ public class KakaoNearbyNatureProvider {
             return Optional.empty();
         }
 
-        URI uri = UriComponentsBuilder.fromUriString(SEARCH_URL)
-                .queryParam("query", "공원")
-                .queryParam("x", coordinate.getX())
-                .queryParam("y", coordinate.getY())
-                .queryParam("radius", RADIUS_METERS)
-                .queryParam("sort", "distance")
-                .queryParam("size", 15)
-                .encode(StandardCharsets.UTF_8)
-                .build()
-                .toUri();
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "KakaoAK " + kakaoRestApiKey);
 
         try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    uri, HttpMethod.GET, new HttpEntity<Void>(headers), String.class);
-            JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode documents = root.path("documents");
             String nearestName = null;
             double nearestDistance = Double.NaN;
             int count = 0;
-            if (documents.isArray()) {
+            for (int page = 1; page <= MAX_PAGE; page++) {
+                URI uri = buildUri(coordinate, page);
+                ResponseEntity<String> response = restTemplate.exchange(
+                        uri, HttpMethod.GET, new HttpEntity<Void>(headers), String.class);
+                JsonNode root = objectMapper.readTree(response.getBody());
+                JsonNode documents = root.path("documents");
+                if (!documents.isArray()) break;
                 for (JsonNode document : documents) {
                     if (!KakaoPlaceCategoryFilter.isPark(document)) {
                         continue;
@@ -93,6 +88,9 @@ public class KakaoNearbyNatureProvider {
                         nearestName = document.path("place_name").asText(null);
                         nearestDistance = distance;
                     }
+                }
+                if (count >= PARK_COUNT_LIMIT || root.path("meta").path("is_end").asBoolean(true)) {
+                    break;
                 }
             }
 
@@ -120,6 +118,20 @@ public class KakaoNearbyNatureProvider {
                     coordinate.getX(), coordinate.getY(), exception);
             return Optional.empty();
         }
+    }
+
+    private URI buildUri(Point coordinate, int page) {
+        return UriComponentsBuilder.fromUriString(SEARCH_URL)
+                .queryParam("query", "공원")
+                .queryParam("x", coordinate.getX())
+                .queryParam("y", coordinate.getY())
+                .queryParam("radius", RADIUS_METERS)
+                .queryParam("sort", "distance")
+                .queryParam("size", PAGE_SIZE)
+                .queryParam("page", page)
+                .encode(StandardCharsets.UTF_8)
+                .build()
+                .toUri();
     }
 
     private double score(int count, double distanceMeters) {

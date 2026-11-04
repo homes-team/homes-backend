@@ -5,9 +5,11 @@ import com.homes.backend.domain.property.building.entity.BuildingInformationStat
 import com.homes.backend.domain.property.building.entity.PropertyBuildingInformation;
 import com.homes.backend.domain.property.building.repository.PropertyBuildingInformationRepository;
 import com.homes.backend.domain.property.entity.Property;
+import com.homes.backend.domain.property.entity.PropertyStatus;
+import com.homes.backend.domain.property.exception.PropertyErrorCode;
 import com.homes.backend.domain.property.repository.PropertyRepository;
 import com.homes.backend.domain.property.insight.repository.PropertyAiEvaluationRepository;
-import com.homes.backend.domain.user.entity.User;
+import com.homes.backend.global.exception.CustomException;
 import com.homes.backend.global.geocoding.GeocodingService;
 import com.homes.backend.global.geocoding.ResolvedAddress;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +38,6 @@ class PropertyBuildingInformationServiceTest {
     @Mock ApartmentBasisClient apartmentBasisClient;
     @Mock PropertyAiEvaluationRepository evaluationRepository;
     @Mock Property property;
-    @Mock User owner;
 
     private PropertyBuildingInformationService service;
 
@@ -53,32 +54,33 @@ class PropertyBuildingInformationServiceTest {
      * Verifies that resolved building-register data is persisted and returned.
      */
     @Test
-    void resolvesAndStoresBuildingRegisterInformation() {
+    void collectsAndStoresBuildingRegisterInformationForCurrentAttempt() {
         ResolvedAddress address = new ResolvedAddress("서울특별시 도봉구 방학동 123-4", 37.66, 127.04,
                 "1132010600", "11320", "10600", "0", "0123", "0004", null);
         BuildingRegisterTitle title = new BuildingRegisterTitle("register-1", "테스트아파트", address.normalizedAddress(),
                 null, LocalDate.of(2004, 6, 18), 720, null, 52.4, 18, 2, 10, 500);
 
-        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
         when(property.getId()).thenReturn(1L);
         when(property.getAddress()).thenReturn(address.normalizedAddress());
-        when(geocodingService.resolve(property.getAddress())).thenReturn(Optional.of(address));
+        when(property.getStatus()).thenReturn(PropertyStatus.AVAILABLE);
+        PropertyBuildingInformation information = new PropertyBuildingInformation(property);
+        AutomaticCollectionAttempt attempt = new AutomaticCollectionAttempt(
+                information.claim(LocalDateTime.now()), address.normalizedAddress());
+        when(propertyRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(property));
+        when(informationRepository.findByIdWithLock(1L)).thenReturn(Optional.of(information));
+        when(geocodingService.resolve(address.normalizedAddress())).thenReturn(Optional.of(address));
         when(buildingRegisterClient.findTitle(address)).thenReturn(Optional.of(title));
         when(buildingRegisterClient.findRecap(address)).thenReturn(Optional.of(
                 new BuildingRegisterRecap("recap-1", LocalDate.of(2004, 6, 18), 720, null, 8, 540)));
         when(apartmentComplexClient.findByAddress(address)).thenReturn(Optional.empty());
-        when(informationRepository.findById(1L)).thenReturn(Optional.empty());
-        when(informationRepository.save(any(PropertyBuildingInformation.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        assertThat(service.collectAutomatically(1L, attempt)).isTrue();
 
-        var response = service.resolve(1L);
-
-        assertThat(response.buildingRegisterId()).isEqualTo("register-1");
-        assertThat(response.buildingYear()).isEqualTo(2004);
-        assertThat(response.householdCount()).isEqualTo(720);
-        assertThat(response.buildingCount()).isEqualTo(8);
-        assertThat(response.parkingCount()).isEqualTo(540);
-        assertThat(response.status()).isEqualTo("RESOLVED");
+        assertThat(information.getBuildingRegisterId()).isEqualTo("register-1");
+        assertThat(information.getBuildingYear()).isEqualTo(2004);
+        assertThat(information.getHouseholdCount()).isEqualTo(720);
+        assertThat(information.getBuildingCount()).isEqualTo(8);
+        assertThat(information.getParkingCount()).isEqualTo(540);
+        assertThat(information.getStatus()).isEqualTo(BuildingInformationStatus.RESOLVED);
         verify(evaluationRepository).deleteById(1L);
     }
 
@@ -87,6 +89,7 @@ class PropertyBuildingInformationServiceTest {
         when(propertyRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(property));
         when(property.getId()).thenReturn(1L);
         when(property.getAddress()).thenReturn("서울특별시 도봉구 방학동 275");
+        when(property.getStatus()).thenReturn(PropertyStatus.AVAILABLE);
         when(informationRepository.findByIdWithLock(1L)).thenReturn(Optional.empty());
 
         boolean queued = service.prepareAutomaticCollection(1L);
@@ -102,18 +105,20 @@ class PropertyBuildingInformationServiceTest {
                 "1132010600", "11320", "10600", "0", "0275", "0000", null);
         BuildingRegisterTitle title = new BuildingRegisterTitle("register-1", "테스트아파트", oldAddress,
                 null, LocalDate.of(2004, 6, 18), 720, null, 52.4, 18, 2, 10, 500);
+        String newAddress = "서울특별시 도봉구 창동 1";
         when(property.getId()).thenReturn(1L);
-        when(property.getAddress()).thenReturn(oldAddress);
+        when(property.getAddress()).thenReturn(oldAddress, newAddress);
+        when(property.getStatus()).thenReturn(PropertyStatus.AVAILABLE);
         PropertyBuildingInformation information = new PropertyBuildingInformation(property);
         LocalDateTime startedAt = LocalDateTime.of(2026, 9, 22, 1, 0);
         String token = information.claim(startedAt);
         AutomaticCollectionAttempt attempt = new AutomaticCollectionAttempt(token, oldAddress);
-        information.queue("서울특별시 도봉구 창동 1", startedAt.plusMinutes(1));
 
         when(geocodingService.resolve(oldAddress)).thenReturn(Optional.of(resolvedAddress));
         when(buildingRegisterClient.findTitle(resolvedAddress)).thenReturn(Optional.of(title));
         when(buildingRegisterClient.findRecap(resolvedAddress)).thenReturn(Optional.empty());
         when(apartmentComplexClient.findByAddress(resolvedAddress)).thenReturn(Optional.empty());
+        when(propertyRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(property));
         when(informationRepository.findByIdWithLock(1L)).thenReturn(Optional.of(information));
 
         boolean saved = service.collectAutomatically(1L, attempt);
@@ -122,5 +127,31 @@ class PropertyBuildingInformationServiceTest {
         assertThat(information.getStatus()).isEqualTo(BuildingInformationStatus.PENDING);
         assertThat(information.getBuildingRegisterId()).isNull();
         verify(evaluationRepository, never()).deleteById(1L);
+    }
+
+    @Test
+    void treatsDeletedPropertyAsNotFound() {
+        when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
+        when(property.getStatus()).thenReturn(PropertyStatus.DELETED);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.get(1L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
+                        .isEqualTo(PropertyErrorCode.PROPERTY_NOT_FOUND));
+
+        verify(informationRepository, never()).findById(1L);
+    }
+
+    @Test
+    void doesNotQueueDeletedPropertyForCollection() {
+        when(propertyRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(property));
+        when(property.getStatus()).thenReturn(PropertyStatus.DELETED);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.prepareAutomaticCollection(1L))
+                .isInstanceOf(CustomException.class)
+                .satisfies(exception -> assertThat(((CustomException) exception).getErrorCode())
+                        .isEqualTo(PropertyErrorCode.PROPERTY_NOT_FOUND));
+
+        verify(informationRepository, never()).findByIdWithLock(1L);
     }
 }

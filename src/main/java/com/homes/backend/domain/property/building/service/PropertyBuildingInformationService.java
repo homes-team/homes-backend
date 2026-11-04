@@ -5,6 +5,7 @@ import com.homes.backend.domain.property.building.dto.BuildingInformationRespDto
 import com.homes.backend.domain.property.building.entity.PropertyBuildingInformation;
 import com.homes.backend.domain.property.building.repository.PropertyBuildingInformationRepository;
 import com.homes.backend.domain.property.entity.Property;
+import com.homes.backend.domain.property.entity.PropertyStatus;
 import com.homes.backend.domain.property.exception.PropertyErrorCode;
 import com.homes.backend.domain.property.insight.repository.PropertyAiEvaluationRepository;
 import com.homes.backend.domain.property.repository.PropertyRepository;
@@ -45,19 +46,11 @@ public class PropertyBuildingInformationService {
                 .orElseGet(() -> BuildingInformationRespDto.notCollected(propertyId));
     }
 
-    /**
-     * Collects and persists building information for a property.
-     */
-    @Transactional
-    public BuildingInformationRespDto resolve(Long propertyId) {
-        Property property = ensurePropertyExists(propertyId);
-        return BuildingInformationRespDto.from(collect(property, loadCollection(property.getAddress())));
-    }
-
     @Transactional
     public boolean prepareAutomaticCollection(Long propertyId) {
         Property property = propertyRepository.findByIdWithPessimisticLock(propertyId)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+        ensureActive(property);
         PropertyBuildingInformation information = informationRepository.findByIdWithLock(propertyId)
                 .orElseGet(() -> new PropertyBuildingInformation(property));
         boolean queued = information.queue(property.getAddress());
@@ -88,8 +81,16 @@ public class PropertyBuildingInformationService {
     @Transactional
     public boolean collectAutomatically(Long propertyId, AutomaticCollectionAttempt attempt) {
         CollectionData collection = loadCollection(attempt.address());
+        Property property = propertyRepository.findByIdWithPessimisticLock(propertyId)
+                .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+        ensureActive(property);
         PropertyBuildingInformation information = informationRepository.findByIdWithLock(propertyId)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+        if (!Objects.equals(property.getAddress(), attempt.address())) {
+            information.queue(property.getAddress());
+            information.requeueIfSuperseded(attempt.token(), attempt.address());
+            return false;
+        }
         if (!information.isCurrentAttempt(attempt.token(), attempt.address())) {
             information.requeueIfSuperseded(attempt.token(), attempt.address());
             return false;
@@ -135,18 +136,6 @@ public class PropertyBuildingInformationService {
         return new CollectionData(address, register, recap, complex, apartment);
     }
 
-    private PropertyBuildingInformation collect(Property property, CollectionData collection) {
-        PropertyBuildingInformation information = informationRepository.findById(property.getId())
-                .orElseGet(() -> new PropertyBuildingInformation(property));
-        Integer previousBuildingYear = information.getBuildingYear();
-        refresh(information, collection);
-        PropertyBuildingInformation saved = informationRepository.save(information);
-        if (!Objects.equals(previousBuildingYear, saved.getBuildingYear())) {
-            evaluationRepository.deleteById(property.getId());
-        }
-        return saved;
-    }
-
     private void refresh(PropertyBuildingInformation information, CollectionData collection) {
         information.refresh(collection.address(), collection.register(), collection.recap(),
                 collection.complex(), collection.apartment());
@@ -156,8 +145,16 @@ public class PropertyBuildingInformationService {
      * Loads the requested property or raises the domain-specific not-found error.
      */
     private Property ensurePropertyExists(Long propertyId) {
-        return propertyRepository.findById(propertyId)
+        Property property = propertyRepository.findById(propertyId)
                 .orElseThrow(() -> new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND));
+        ensureActive(property);
+        return property;
+    }
+
+    private void ensureActive(Property property) {
+        if (property.getStatus() == PropertyStatus.DELETED) {
+            throw new CustomException(PropertyErrorCode.PROPERTY_NOT_FOUND);
+        }
     }
 
     private record CollectionData(

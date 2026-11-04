@@ -21,7 +21,7 @@ public class BuildingInformationAsyncConfig {
         executor.setMaxPoolSize(4);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("building-info-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.initialize();
         return executor;
     }

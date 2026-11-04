@@ -28,7 +28,7 @@ public interface PropertyBuildingInformationControllerDocs {
     /**
      * Documents the public endpoint that collects and refreshes building information.
      */
-    @Operation(summary = "매물 건물정보 수동 수집·갱신", description = "자동 수집 실패 후 재시도하거나 정보를 강제로 갱신합니다. 매물 주소를 법정동·지번으로 해석한 뒤 건축물대장과 K-apt 정보를 수집하며 누구나 실행할 수 있습니다.")
+    @Operation(summary = "매물 건물정보 수동 수집·갱신", description = "자동 수집 실패 후 재시도를 요청합니다. 요청은 자동 수집과 같은 작업 큐에 등록되고 동일 매물의 중복 요청은 하나로 합쳐집니다. 현재 수집 상태를 즉시 반환하며 누구나 실행할 수 있습니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수집 또는 갱신 성공", useReturnTypeSchema = true),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 매물",
