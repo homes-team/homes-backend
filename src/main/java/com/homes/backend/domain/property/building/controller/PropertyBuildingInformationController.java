@@ -2,12 +2,9 @@ package com.homes.backend.domain.property.building.controller;
 
 import com.homes.backend.domain.property.building.dto.BuildingInformationRespDto;
 import com.homes.backend.domain.property.building.service.PropertyBuildingInformationService;
-import com.homes.backend.global.exception.CustomException;
-import com.homes.backend.global.exception.GlobalErrorCode;
+import com.homes.backend.domain.property.building.service.PropertyBuildingInformationAutoLoadService;
 import com.homes.backend.global.response.ApiResponse;
-import com.homes.backend.global.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/properties/{propertyId}/building-information")
 public class PropertyBuildingInformationController implements PropertyBuildingInformationControllerDocs {
     private final PropertyBuildingInformationService service;
+    private final PropertyBuildingInformationAutoLoadService autoLoadService;
 
     /**
      * Returns the most recently collected building information for a property.
@@ -26,17 +24,11 @@ public class PropertyBuildingInformationController implements PropertyBuildingIn
     }
 
     /**
-     * Resolves and refreshes building information after verifying the property owner.
+     * Queues a building-information refresh for a public property detail page.
      */
     @Override
     @PostMapping("/resolve")
-    public ApiResponse<BuildingInformationRespDto> resolve(
-            @PathVariable Long propertyId,
-            @AuthenticationPrincipal UserPrincipal userPrincipal
-    ) {
-        if (userPrincipal == null) {
-            throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
-        }
-        return ApiResponse.onSuccess(service.resolve(propertyId, userPrincipal.getId()));
+    public ApiResponse<BuildingInformationRespDto> resolve(@PathVariable Long propertyId) {
+        return ApiResponse.onSuccess(autoLoadService.requestCollection(propertyId));
     }
 }

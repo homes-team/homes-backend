@@ -28,6 +28,8 @@ import java.util.List;
 public class KakaoNearbyFacilityProvider {
     private static final String CATEGORY_URL = "https://dapi.kakao.com/v2/local/search/category.json";
     private static final String KEYWORD_URL = "https://dapi.kakao.com/v2/local/search/keyword.json";
+    private static final int PAGE_SIZE = 15;
+    private static final int MAX_PAGE = 45;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -57,33 +59,44 @@ public class KakaoNearbyFacilityProvider {
             return List.of();
         }
 
-        URI uri = buildUri(center, type, radiusMeters, limit);
-        if (uri == null) return List.of();
-
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "KakaoAK " + kakaoRestApiKey);
+        List<Place> places = new ArrayList<>();
         try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    uri, HttpMethod.GET, new HttpEntity<Void>(headers), String.class);
-            JsonNode documents = objectMapper.readTree(response.getBody()).path("documents");
-            if (!documents.isArray()) return List.of();
+            for (int page = 1; page <= MAX_PAGE; page++) {
+                URI uri = buildUri(center, type, radiusMeters, limit, page);
+                if (uri == null) return List.of();
+                ResponseEntity<String> response = restTemplate.exchange(
+                        uri, HttpMethod.GET, new HttpEntity<Void>(headers), String.class);
+                JsonNode root = objectMapper.readTree(response.getBody());
+                JsonNode documents = root.path("documents");
+                if (!documents.isArray()) return List.copyOf(places);
 
-            List<Place> places = new ArrayList<>();
-            for (JsonNode document : documents) {
-                double longitude = document.path("x").asDouble(Double.NaN);
-                double latitude = document.path("y").asDouble(Double.NaN);
-                String name = document.path("place_name").asText(null);
-                if (!Double.isFinite(longitude) || !Double.isFinite(latitude) || !StringUtils.hasText(name)) {
-                    continue;
+                for (JsonNode document : documents) {
+                    if (type == FacilityType.PARK && !KakaoPlaceCategoryFilter.isPark(document)) {
+                        continue;
+                    }
+                    double longitude = document.path("x").asDouble(Double.NaN);
+                    double latitude = document.path("y").asDouble(Double.NaN);
+                    String name = document.path("place_name").asText(null);
+                    if (!Double.isFinite(longitude) || !Double.isFinite(latitude) || !StringUtils.hasText(name)) {
+                        continue;
+                    }
+                    double distance = document.path("distance").asDouble(Double.NaN);
+                    if (!Double.isFinite(distance)) {
+                        distance = haversineMeters(center.getY(), center.getX(), latitude, longitude);
+                    }
+                    String address = document.path("road_address_name").asText("");
+                    if (!StringUtils.hasText(address)) address = document.path("address_name").asText(null);
+                    String id = document.path("id").asText(name + "@" + latitude + "," + longitude);
+                    places.add(new Place(id, name, latitude, longitude, Math.round(distance), address));
+                    if (places.size() >= limit) break;
                 }
-                double distance = document.path("distance").asDouble(Double.NaN);
-                if (!Double.isFinite(distance)) {
-                    distance = haversineMeters(center.getY(), center.getX(), latitude, longitude);
+
+                boolean isEnd = root.path("meta").path("is_end").asBoolean(true);
+                if (type != FacilityType.PARK || places.size() >= limit || isEnd) {
+                    break;
                 }
-                String address = document.path("road_address_name").asText("");
-                if (!StringUtils.hasText(address)) address = document.path("address_name").asText(null);
-                String id = document.path("id").asText(name + "@" + latitude + "," + longitude);
-                places.add(new Place(id, name, latitude, longitude, Math.round(distance), address));
             }
             return List.copyOf(places);
         } catch (Exception exception) {
@@ -93,7 +106,7 @@ public class KakaoNearbyFacilityProvider {
         }
     }
 
-    private URI buildUri(Point center, FacilityType type, int radiusMeters, int limit) {
+    private URI buildUri(Point center, FacilityType type, int radiusMeters, int limit, int page) {
         String categoryCode = switch (type) {
             case SCHOOL -> "SC4";
             case HOSPITAL -> "HP8";
@@ -103,7 +116,8 @@ public class KakaoNearbyFacilityProvider {
         };
         UriComponentsBuilder builder;
         if (type == FacilityType.PARK) {
-            builder = UriComponentsBuilder.fromUriString(KEYWORD_URL).queryParam("query", "공원");
+            builder = UriComponentsBuilder.fromUriString(KEYWORD_URL)
+                    .queryParam("query", "공원");
         } else if (categoryCode != null) {
             builder = UriComponentsBuilder.fromUriString(CATEGORY_URL)
                     .queryParam("category_group_code", categoryCode);
@@ -115,7 +129,10 @@ public class KakaoNearbyFacilityProvider {
                 .queryParam("y", center.getY())
                 .queryParam("radius", radiusMeters)
                 .queryParam("sort", "distance")
-                .queryParam("size", limit)
+                .queryParam("size", type == FacilityType.PARK ? PAGE_SIZE : limit)
+                .queryParamIfPresent("page", type == FacilityType.PARK
+                        ? java.util.Optional.of(page)
+                        : java.util.Optional.empty())
                 .encode(StandardCharsets.UTF_8)
                 .build()
                 .toUri();
