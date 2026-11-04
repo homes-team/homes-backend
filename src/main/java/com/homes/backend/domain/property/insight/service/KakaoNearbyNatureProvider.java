@@ -27,7 +27,7 @@ import java.util.Optional;
 @Slf4j
 @Component
 public class KakaoNearbyNatureProvider {
-    static final String POLICY_VERSION = "NATIONWIDE_NATURE_V1";
+    static final String POLICY_VERSION = "NATIONWIDE_NATURE_V2";
     private static final String SEARCH_URL = "https://dapi.kakao.com/v2/local/search/keyword.json";
     private static final int RADIUS_METERS = 2_000;
 
@@ -66,7 +66,7 @@ public class KakaoNearbyNatureProvider {
                 .queryParam("y", coordinate.getY())
                 .queryParam("radius", RADIUS_METERS)
                 .queryParam("sort", "distance")
-                .queryParam("size", 1)
+                .queryParam("size", 15)
                 .encode(StandardCharsets.UTF_8)
                 .build()
                 .toUri();
@@ -77,14 +77,23 @@ public class KakaoNearbyNatureProvider {
             ResponseEntity<String> response = restTemplate.exchange(
                     uri, HttpMethod.GET, new HttpEntity<Void>(headers), String.class);
             JsonNode root = objectMapper.readTree(response.getBody());
-            int count = root.path("meta").path("total_count").asInt(0);
             JsonNode documents = root.path("documents");
             String nearestName = null;
             double nearestDistance = Double.NaN;
-            if (documents.isArray() && !documents.isEmpty()) {
-                JsonNode nearest = documents.get(0);
-                nearestName = nearest.path("place_name").asText(null);
-                nearestDistance = nearest.path("distance").asDouble(Double.NaN);
+            int count = 0;
+            if (documents.isArray()) {
+                for (JsonNode document : documents) {
+                    if (!KakaoPlaceCategoryFilter.isPark(document)) {
+                        continue;
+                    }
+                    count++;
+                    double distance = document.path("distance").asDouble(Double.NaN);
+                    if (nearestName == null || !Double.isFinite(nearestDistance)
+                            || (Double.isFinite(distance) && distance < nearestDistance)) {
+                        nearestName = document.path("place_name").asText(null);
+                        nearestDistance = distance;
+                    }
+                }
             }
 
             double score = score(count, nearestDistance);

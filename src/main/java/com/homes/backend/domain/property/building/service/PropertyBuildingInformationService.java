@@ -46,15 +46,11 @@ public class PropertyBuildingInformationService {
     }
 
     /**
-     * Collects and persists building information when requested by the property owner.
+     * Collects and persists building information for a property.
      */
     @Transactional
-    public BuildingInformationRespDto resolve(Long propertyId, Long userId) {
+    public BuildingInformationRespDto resolve(Long propertyId) {
         Property property = ensurePropertyExists(propertyId);
-        if (!property.getUser().getId().equals(userId)) {
-            throw new CustomException(PropertyErrorCode.UNAUTHORIZED_ACCESS);
-        }
-
         return BuildingInformationRespDto.from(collect(property, loadCollection(property.getAddress())));
     }
 

@@ -149,6 +149,10 @@ public class SecurityConfig {
                                 "/properties/infrastructure",
                                 "/seed-images/**"
                         ).permitAll()
+                        .requestMatchers(
+                                org.springframework.http.HttpMethod.POST,
+                                "/properties/{propertyId}/building-information/resolve"
+                        ).permitAll()
 
                         // Swagger 관련 프리패스 주소 (이건 기존 yml 설정에 맞게 유지)
                         .requestMatchers("/api-docs", "/api-docs/**").permitAll()

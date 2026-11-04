@@ -60,8 +60,6 @@ class PropertyBuildingInformationServiceTest {
                 null, LocalDate.of(2004, 6, 18), 720, null, 52.4, 18, 2, 10, 500);
 
         when(propertyRepository.findById(1L)).thenReturn(Optional.of(property));
-        when(property.getUser()).thenReturn(owner);
-        when(owner.getId()).thenReturn(7L);
         when(property.getId()).thenReturn(1L);
         when(property.getAddress()).thenReturn(address.normalizedAddress());
         when(geocodingService.resolve(property.getAddress())).thenReturn(Optional.of(address));
@@ -73,7 +71,7 @@ class PropertyBuildingInformationServiceTest {
         when(informationRepository.save(any(PropertyBuildingInformation.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = service.resolve(1L, 7L);
+        var response = service.resolve(1L);
 
         assertThat(response.buildingRegisterId()).isEqualTo("register-1");
         assertThat(response.buildingYear()).isEqualTo(2004);

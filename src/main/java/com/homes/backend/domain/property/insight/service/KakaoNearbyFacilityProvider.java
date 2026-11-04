@@ -70,6 +70,9 @@ public class KakaoNearbyFacilityProvider {
 
             List<Place> places = new ArrayList<>();
             for (JsonNode document : documents) {
+                if (type == FacilityType.PARK && !KakaoPlaceCategoryFilter.isPark(document)) {
+                    continue;
+                }
                 double longitude = document.path("x").asDouble(Double.NaN);
                 double latitude = document.path("y").asDouble(Double.NaN);
                 String name = document.path("place_name").asText(null);
@@ -84,6 +87,9 @@ public class KakaoNearbyFacilityProvider {
                 if (!StringUtils.hasText(address)) address = document.path("address_name").asText(null);
                 String id = document.path("id").asText(name + "@" + latitude + "," + longitude);
                 places.add(new Place(id, name, latitude, longitude, Math.round(distance), address));
+                if (places.size() >= limit) {
+                    break;
+                }
             }
             return List.copyOf(places);
         } catch (Exception exception) {
@@ -103,7 +109,9 @@ public class KakaoNearbyFacilityProvider {
         };
         UriComponentsBuilder builder;
         if (type == FacilityType.PARK) {
-            builder = UriComponentsBuilder.fromUriString(KEYWORD_URL).queryParam("query", "공원");
+            builder = UriComponentsBuilder.fromUriString(KEYWORD_URL)
+                    .queryParam("query", "공원")
+                    .queryParam("size", 15);
         } else if (categoryCode != null) {
             builder = UriComponentsBuilder.fromUriString(CATEGORY_URL)
                     .queryParam("category_group_code", categoryCode);
@@ -115,7 +123,9 @@ public class KakaoNearbyFacilityProvider {
                 .queryParam("y", center.getY())
                 .queryParam("radius", radiusMeters)
                 .queryParam("sort", "distance")
-                .queryParam("size", limit)
+                .queryParamIfPresent("size", type == FacilityType.PARK
+                        ? java.util.Optional.empty()
+                        : java.util.Optional.of(limit))
                 .encode(StandardCharsets.UTF_8)
                 .build()
                 .toUri();
