@@ -418,7 +418,6 @@ public class PropertyService {
                 reqDto.maxMonthlyRent(),
                 reqDto.minArea(),
                 reqDto.maxArea(),
-                reqDto.keyword(),
                 reqDto.options(),
                 normalizedSortBy,
                 recentViewedIds

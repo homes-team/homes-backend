@@ -22,7 +22,6 @@ public interface PropertyRepositoryCustom {
             Integer maxMonthlyRent,
             Double minArea,
             Double maxArea,
-            String keyword,
             List<PropertyOption> options,
             PropertySortType sortBy,
             List<Long> recentViewedIds

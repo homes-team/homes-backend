@@ -138,7 +138,7 @@ public class PropertyRepositoryImpl implements PropertyRepositoryCustom{
             Polygon boundingBox, List<PropertyStatus> statuses, TradeType tradeType,
             PropertyType propertyType, Integer minDeposit, Integer maxDeposit,
             Integer minMonthlyRent, Integer maxMonthlyRent, Double minArea, Double maxArea,
-            String keyword, List<PropertyOption> options, PropertySortType sortBy, List<Long> recentViewedIds
+            List<PropertyOption> options, PropertySortType sortBy, List<Long> recentViewedIds
     ) {
 
         return queryFactory
@@ -151,7 +151,6 @@ public class PropertyRepositoryImpl implements PropertyRepositoryCustom{
                         depositBetween(minDeposit, maxDeposit),
                         monthlyRentBetween(minMonthlyRent, maxMonthlyRent),
                         areaBetween(minArea, maxArea),
-                        keywordMatches(keyword),
                         optionsContainAll(options)
                 )
                 .orderBy(getOrderSpecifier(sortBy, recentViewedIds))

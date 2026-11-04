@@ -31,8 +31,6 @@ public record PropertyMapSearchReqDto(
         /**
          * 기본 필터
          */
-        @Schema(description = "검색어 (주소 · 제목 · 태그 부분 일치)", example = "역삼동")
-        String keyword,
 
         @PositiveOrZero(message = "면적은 0 이상이어야 합니다.")
         @Schema(description = "최소 전용면적(m²)", example = "20")
