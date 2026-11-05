@@ -126,6 +126,11 @@ public class ChatService {
             throw new CustomException(ChatErrorCode.CHAT_ROOM_SUSPENDED);
         }
 
+        // 보낸 사람이 나갔거나 상대가 나간 방이면 저장/알림 모두 막는다 (나간 뒤에도 알림이 오는 문제 방지)
+        if (room.isUserLeft() || room.isAgentLeft()) {
+            throw new CustomException(ChatErrorCode.CHAT_ROOM_LEFT);
+        }
+
         boolean senderIsUserSide = room.isUserSide(senderId);
         User sender = senderIsUserSide ? room.getUser() : room.getAgentUser();
         User recipient = senderIsUserSide ? room.getAgentUser() : room.getUser();
