@@ -1,5 +1,6 @@
 package com.homes.backend.domain.verification.controller;
 
+import com.homes.backend.domain.property.dto.response.PresignedUrlResDto;
 import com.homes.backend.domain.verification.dto.request.OwnerVerificationReqDto;
 import com.homes.backend.domain.verification.dto.request.RealtorVerificationReqDto;
 import com.homes.backend.domain.verification.dto.response.VerificationStatusRespDto;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @Tag(name = "인증(Verification) API", description = "매물 인증 (집주인 서류 / 중개사 현장) API")
 public interface VerificationControllerDocs {
@@ -31,6 +33,20 @@ public interface VerificationControllerDocs {
     ApiResponse<String> requestOwnerVerification(
             @Parameter(description = "인증할 매물의 ID", example = "1") @PathVariable Long propertyId,
             @RequestBody OwnerVerificationReqDto reqDto,
+            @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal
+    );
+
+    @Operation(summary = "집주인 등기부등본 업로드용 Presigned URL 발급", description = "AWS S3의 documents 폴더에 등기부등본을 업로드하기 위한 Presigned URL을 발급받습니다.")
+    ApiResponse<PresignedUrlResDto> getOwnerDocumentPresignedUrl(
+            @Parameter(description = "인증할 매물의 ID", example = "1") @PathVariable Long propertyId,
+            @Parameter(description = "업로드할 파일명 (확장자 포함)", example = "document.jpg") @RequestParam String fileName,
+            @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal
+    );
+
+    @Operation(summary = "중개사 현장 사진 업로드용 Presigned URL 발급", description = "AWS S3의 verifications 폴더에 현장 사진을 업로드하기 위한 Presigned URL을 발급받습니다.")
+    ApiResponse<PresignedUrlResDto> getRealtorPhotoPresignedUrl(
+            @Parameter(description = "인증할 매물의 ID", example = "1") @PathVariable Long propertyId,
+            @Parameter(description = "업로드할 파일명 (확장자 포함)", example = "photo.jpg") @RequestParam String fileName,
             @Parameter(hidden = true) @AuthenticationPrincipal UserPrincipal userPrincipal
     );
 }
