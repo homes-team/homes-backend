@@ -6,3 +6,12 @@ spring:
   jpa:
     hibernate.ddl-auto: validate
     properties.hibernate.jdbc.time_zone: UTC
+
+# 외부 API 키 설정 모음
+google:
+  vision:
+    key-base64: ${GOOGLE_VISION_KEY_BASE64}
+
+external-api:
+  openai:
+    api-key: ${EXTERNAL_API_OPENAI_API_KEY}
