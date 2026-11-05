@@ -181,4 +181,28 @@ public class S3PresignedUrlService {
         presigner.close();
         s3Client.close();
     }
+
+    /**
+     * 검증이 완료된 이미지 byte[]를 안전한 격리 폴더에 새 이름으로 직접 업로드합니다.
+     */
+    public String uploadVerifiedImage(byte[] imageBytes, String originalUrl) {
+        String extension = ".jpg";
+        if (originalUrl != null && originalUrl.lastIndexOf(".") > 0) {
+            extension = originalUrl.substring(originalUrl.lastIndexOf("."));
+        }
+
+        String newFileName = "verified-verifications/" + UUID.randomUUID() + extension;
+
+        software.amazon.awssdk.services.s3.model.PutObjectRequest putObjectRequest = software.amazon.awssdk.services.s3.model.PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(newFileName)
+                .contentType("image/jpeg")
+                .contentLength((long) imageBytes.length)
+                .build();
+
+        // 현재 클래스에 이미 만들어져 있는 s3Client와 publicUrlPrefix를 그대로 사용합니다.
+        s3Client.putObject(putObjectRequest, software.amazon.awssdk.core.sync.RequestBody.fromBytes(imageBytes));
+
+        return publicUrlPrefix + newFileName;
+    }
 }
