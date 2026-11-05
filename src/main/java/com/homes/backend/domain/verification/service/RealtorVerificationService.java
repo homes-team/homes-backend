@@ -15,7 +15,7 @@ import com.homes.backend.domain.verification.exception.VerificationErrorCode;
 import com.homes.backend.domain.verification.repository.OwnerVerificationRepository;
 import com.homes.backend.domain.verification.repository.RealtorVerificationRepository;
 import com.homes.backend.global.exception.CustomException;
-import com.homes.backend.global.storage.S3UploadService;
+import com.homes.backend.global.storage.S3PresignedUrlService;
 import com.homes.backend.global.util.ExifData;
 import com.homes.backend.global.util.VisionApiService;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +33,7 @@ import java.time.ZoneId;
 @RequiredArgsConstructor
 public class RealtorVerificationService {
 
-    private final S3UploadService s3UploadService;
+    private final S3PresignedUrlService s3PresignedUrlService;
     private final PropertyRepository propertyRepository;
     private final AgentRepository agentRepository;
     private final RealtorVerificationRepository realtorVerificationRepository;
@@ -116,7 +116,7 @@ public class RealtorVerificationService {
             // [보안 취약점(TOCTOU) 방어 로직 추가]
             // 검증(도용, EXIF 등)을 모두 통과한 1차 다운로드된 안전한 원본 byte[]를 S3 격리 폴더에 직접 업로드합니다.
             // 남은 Presigned URL 유효 시간 동안 악의적인 덮어쓰기 공격이 들어오더라도 DB에는 이 새로운 URL이 저장되므로 안전합니다.
-            securePhotoUrl = s3UploadService.uploadVerifiedImage(imageBytes, reqDto.photoUrl());
+            securePhotoUrl = s3PresignedUrlService.uploadVerifiedImage(imageBytes, reqDto.photoUrl());
         }
 
         RealtorVerification verification = RealtorVerification.builder()
