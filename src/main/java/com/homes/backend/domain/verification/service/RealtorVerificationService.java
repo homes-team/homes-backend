@@ -15,6 +15,7 @@ import com.homes.backend.domain.verification.exception.VerificationErrorCode;
 import com.homes.backend.domain.verification.repository.OwnerVerificationRepository;
 import com.homes.backend.domain.verification.repository.RealtorVerificationRepository;
 import com.homes.backend.global.exception.CustomException;
+import com.homes.backend.global.storage.S3UploadService;
 import com.homes.backend.global.util.ExifData;
 import com.homes.backend.global.util.VisionApiService;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ import java.time.ZoneId;
 @RequiredArgsConstructor
 public class RealtorVerificationService {
 
+    private final S3UploadService s3UploadService;
     private final PropertyRepository propertyRepository;
     private final AgentRepository agentRepository;
     private final RealtorVerificationRepository realtorVerificationRepository;
@@ -100,6 +102,9 @@ public class RealtorVerificationService {
                 ? VerificationStatus.APPROVED
                 : VerificationStatus.REJECTED;
 
+        // 최종적으로 DB에 저장될 안전한 URL 변수 선언 (기본값은 프론트에서 보낸 URL)
+        String securePhotoUrl = reqDto.photoUrl();
+
         // --- 도용 사진(역이미지 검색) 검사 (거리 검증을 통과한 경우에만 수행) ---
         if (status == VerificationStatus.APPROVED) {
             boolean isStolen = visionApiService.isStolenImage(imageBytes);
@@ -107,12 +112,17 @@ public class RealtorVerificationService {
                 // 도용이 확인되면 에러를 던짐
                 throw new CustomException(VerificationErrorCode.STOLEN_IMAGE_DETECTED);
             }
+
+            // [보안 취약점(TOCTOU) 방어 로직 추가]
+            // 검증(도용, EXIF 등)을 모두 통과한 1차 다운로드된 안전한 원본 byte[]를 S3 격리 폴더에 직접 업로드합니다.
+            // 남은 Presigned URL 유효 시간 동안 악의적인 덮어쓰기 공격이 들어오더라도 DB에는 이 새로운 URL이 저장되므로 안전합니다.
+            securePhotoUrl = s3UploadService.uploadVerifiedImage(imageBytes, reqDto.photoUrl());
         }
 
         RealtorVerification verification = RealtorVerification.builder()
                 .property(property)
                 .agent(agent)
-                .photoUrl(reqDto.photoUrl())
+                .photoUrl(securePhotoUrl) // 프론트엔드 URL 대신, 백엔드가 직접 업로드한 안전한 URL 저장
                 .location(realtorLocation)
                 .distanceMeter(distanceMeter)
                 .status(status)
