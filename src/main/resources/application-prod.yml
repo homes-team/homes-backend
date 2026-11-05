@@ -12,7 +12,6 @@ google:
   vision:
     key-base64: ${GOOGLE_VISION_KEY_BASE64}
 
-external:
-  api:
-    openai:
-      api-key: ${EXTERNAL_API_OPENAI_API_KEY}
+external-api:
+  openai:
+    api-key: ${EXTERNAL_API_OPENAI_API_KEY}

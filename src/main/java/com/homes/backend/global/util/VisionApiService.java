@@ -18,7 +18,7 @@ import java.util.List;
 @Component
 public class VisionApiService {
 
-    @Value("${google.vision.key-base64}")
+    @Value("${google.vision.key-base64:}")
     private String visionKeyBase64;
 
     /**
