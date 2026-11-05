@@ -1,5 +1,6 @@
 package com.homes.backend.domain.verification.controller;
 
+import com.homes.backend.domain.property.dto.response.PresignedUrlResDto;
 import com.homes.backend.domain.verification.dto.request.OwnerVerificationReqDto;
 import com.homes.backend.domain.verification.dto.request.RealtorVerificationReqDto;
 import com.homes.backend.domain.verification.dto.response.VerificationStatusRespDto;
@@ -8,8 +9,11 @@ import com.homes.backend.domain.verification.exception.VerificationErrorCode;
 import com.homes.backend.domain.verification.service.OwnerVerificationService;
 import com.homes.backend.domain.verification.service.RealtorVerificationService;
 import com.homes.backend.global.exception.CustomException;
+import com.homes.backend.global.exception.GlobalErrorCode;
 import com.homes.backend.global.response.ApiResponse;
 import com.homes.backend.global.security.UserPrincipal;
+import com.homes.backend.global.storage.PresignedUploadInfo;
+import com.homes.backend.global.storage.S3PresignedUrlService;
 import com.homes.backend.global.util.ExifData;
 import com.homes.backend.global.util.ExifExtractor;
 import com.homes.backend.global.util.ImageDownloadUtil;
@@ -22,11 +26,18 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RequestMapping("/properties/{propertyId}/verifications")
 public class VerificationController implements VerificationControllerDocs {
+
+    private final S3PresignedUrlService s3PresignedUrlService;
     private final RealtorVerificationService realtorVerificationService;
     private final ExifExtractor exifExtractor;
     private final ImageDownloadUtil imageDownloadUtil;
     private final OwnerVerificationService ownerVerificationService;
 
+    // S3 업로드 폴더 분리 상수
+    private static final String OWNER_DOCUMENT_FOLDER = "documents";
+    private static final String REALTOR_PHOTO_FOLDER = "verifications";
+
+    // --- 중개사 현장 인증 요청 ---
     @Override
     @PostMapping
     public ApiResponse<String> requestRealtorVerification(
@@ -63,6 +74,7 @@ public class VerificationController implements VerificationControllerDocs {
         return ApiResponse.onSuccess("현장 인증이 성공적으로 처리되었습니다.");
     }
 
+    // --- 매물 인증 상태 조회  ---
     @Override
     @GetMapping
     public ApiResponse<VerificationStatusRespDto> getVerificationStatus(
@@ -72,6 +84,7 @@ public class VerificationController implements VerificationControllerDocs {
         return ApiResponse.onSuccess(response);
     }
 
+    // 집주인 서류 인증 요청 ---
     @Override
     @PostMapping("/owner")
     public ApiResponse<String> requestOwnerVerification(
@@ -84,5 +97,41 @@ public class VerificationController implements VerificationControllerDocs {
 
         // 프론트엔드에 요청 성공 응답만 먼저 보냄
         return ApiResponse.onSuccess("집주인 서류 인증이 요청되었습니다. 1~2분 후 상태를 확인해주세요.");
+    }
+
+    // --- 집주인 등기부등본 업로드용 URL 발급 ---
+    @Override
+    @GetMapping("/owner/presigned-url")
+    public ApiResponse<PresignedUrlResDto> getOwnerDocumentPresignedUrl(
+            @PathVariable Long propertyId,
+            @RequestParam String fileName,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        if (userPrincipal == null) {
+            throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
+        }
+
+        String identity = "user:" + userPrincipal.getId();
+        PresignedUploadInfo info = s3PresignedUrlService.issueUploadUrl(OWNER_DOCUMENT_FOLDER, fileName, identity);
+
+        return ApiResponse.onSuccess(PresignedUrlResDto.from(info));
+    }
+
+    // --- 중개사 현장 사진 업로드용 URL 발급 ---
+    @Override
+    @GetMapping("/realtor/presigned-url")
+    public ApiResponse<PresignedUrlResDto> getRealtorPhotoPresignedUrl(
+            @PathVariable Long propertyId,
+            @RequestParam String fileName,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        if (userPrincipal == null) {
+            throw new CustomException(GlobalErrorCode.UNAUTHORIZED);
+        }
+
+        String identity = "agent:" + userPrincipal.getId();
+        PresignedUploadInfo info = s3PresignedUrlService.issueUploadUrl(REALTOR_PHOTO_FOLDER, fileName, identity);
+
+        return ApiResponse.onSuccess(PresignedUrlResDto.from(info));
     }
 }
