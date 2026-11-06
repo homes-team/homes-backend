@@ -80,7 +80,8 @@ class PropertySeedInitializerTest {
         assertThat(seeded).filteredOn(property -> property.getPropertyType() == PropertyType.OFFICETEL).hasSize(29);
         assertThat(seeded).filteredOn(property -> property.getPropertyType() == PropertyType.APARTMENT).hasSize(79);
         assertThat(seeded).allSatisfy(property -> {
-            assertThat(property.getTitle()).startsWith("[시드]");
+            assertThat(property.getTitle()).isNotBlank();
+            assertThat(property.getDescription()).isNotBlank();
             assertThat(property.getCoordinate().getSRID()).isEqualTo(4326);
         });
         assertThat(seeded).filteredOn(property -> property.getImages().isEmpty()).hasSize(13);

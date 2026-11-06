@@ -43,7 +43,6 @@ import java.util.concurrent.ThreadLocalRandom;
 @ConditionalOnProperty(prefix = "app.seed.properties", name = "enabled", havingValue = "true")
 public class PropertySeedInitializer implements ApplicationRunner {
     private static final String DATASET_PATH = "seed/property-regions-v1.json";
-    private static final String SEED_MARKER = "[개발용 시드 #114]";
 
     // S3의 이 폴더에 올라가 있는 사진은 개수/이름 상관없이 전부 자동으로 풀에 포함된다
     private static final String SEED_IMAGE_FOLDER = "seed-images";
@@ -129,8 +128,8 @@ public class PropertySeedInitializer implements ApplicationRunner {
 
         return Property.builder()
                 .user(owner)
-                .title("[시드] " + displayName)
-                .description(SEED_MARKER + " 지도·검색·필터·클러스터링 확인을 위한 테스트 매물입니다.")
+                .title(displayName)
+                .description("깨끗하고 채광 좋은 매물입니다. 주변 생활 인프라가 잘 갖춰져 있어 거주하기 편리합니다.")
                 .address(region.address())
                 .detailAddress(template.detailAddress())
                 .tradeType(template.tradeType())
