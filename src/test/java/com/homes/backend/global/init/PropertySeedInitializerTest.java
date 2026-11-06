@@ -6,6 +6,7 @@ import com.homes.backend.domain.property.entity.PropertyType;
 import com.homes.backend.domain.property.repository.PropertyRepository;
 import com.homes.backend.domain.user.entity.User;
 import com.homes.backend.domain.user.repository.UserRepository;
+import com.homes.backend.global.storage.S3PresignedUrlService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +23,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -34,6 +36,13 @@ class PropertySeedInitializerTest {
     @Mock PropertyRepository propertyRepository;
     @Mock UserRepository userRepository;
     @Mock EntityManager entityManager;
+    @Mock S3PresignedUrlService s3PresignedUrlService;
+
+    private static final List<String> IMAGE_POOL = List.of(
+            "https://test-bucket.s3.ap-southeast-2.amazonaws.com/seed-images/test-1.jpg",
+            "https://test-bucket.s3.ap-southeast-2.amazonaws.com/seed-images/test-2.jpg",
+            "https://test-bucket.s3.ap-southeast-2.amazonaws.com/seed-images/test-3.jpg"
+    );
 
     private PropertySeedProperties properties;
     private PropertySeedInitializer initializer;
@@ -43,8 +52,8 @@ class PropertySeedInitializerTest {
     void setUp() {
         properties = new PropertySeedProperties();
         properties.setOwnerEmail("seed-owner@homes.test");
-        properties.setImageBaseUrl("http://localhost:8080/seed-images/");
-        initializer = new PropertySeedInitializer(propertyRepository, userRepository, entityManager, properties, new ObjectMapper());
+        initializer = new PropertySeedInitializer(
+                propertyRepository, userRepository, entityManager, properties, new ObjectMapper(), s3PresignedUrlService);
         owner = User.builder()
                 .id(77L)
                 .email("seed-owner@homes.test")
@@ -52,6 +61,7 @@ class PropertySeedInitializerTest {
                 .isIdentityVerified(true)
                 .build();
         when(userRepository.findByEmail(owner.getEmail())).thenReturn(Optional.of(owner));
+        when(s3PresignedUrlService.listObjectUrls(anyString())).thenReturn(IMAGE_POOL);
     }
 
     @Test
@@ -76,8 +86,7 @@ class PropertySeedInitializerTest {
         assertThat(seeded).filteredOn(property -> property.getImages().isEmpty()).hasSize(13);
         assertThat(seeded).anySatisfy(property -> {
             assertThat(property.getImages()).isNotEmpty();
-            assertThat(property.getImages().getFirst().getImageUrl())
-                    .startsWith("http://localhost:8080/seed-images/");
+            assertThat(property.getImages().getFirst().getImageUrl()).isIn(IMAGE_POOL);
             assertThat(property.getImages().getFirst().getIsThumbnail()).isTrue();
         });
     }

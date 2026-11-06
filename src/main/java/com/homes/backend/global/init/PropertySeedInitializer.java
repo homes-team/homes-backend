@@ -11,6 +11,7 @@ import com.homes.backend.domain.property.entity.TradeType;
 import com.homes.backend.domain.property.repository.PropertyRepository;
 import com.homes.backend.domain.user.entity.User;
 import com.homes.backend.domain.user.repository.UserRepository;
+import com.homes.backend.global.storage.S3PresignedUrlService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
@@ -24,28 +25,35 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
+/**
+ * local 전용이 아니라 모든 프로파일(배포 환경 포함)에서 동작하도록 열어두되,
+ * app.seed.properties.enabled(기본값 false)를 명시적으로 켜야만 실행되는 구조로 안전장치를 둔다.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@Profile("local")
 @ConditionalOnProperty(prefix = "app.seed.properties", name = "enabled", havingValue = "true")
 public class PropertySeedInitializer implements ApplicationRunner {
     private static final String DATASET_PATH = "seed/property-regions-v1.json";
     private static final String SEED_MARKER = "[개발용 시드 #114]";
+
+    // S3의 이 폴더에 올라가 있는 사진은 개수/이름 상관없이 전부 자동으로 풀에 포함된다
+    private static final String SEED_IMAGE_FOLDER = "seed-images";
 
     private final PropertyRepository propertyRepository;
     private final UserRepository userRepository;
     private final EntityManager entityManager;
     private final PropertySeedProperties properties;
     private final ObjectMapper objectMapper;
+    private final S3PresignedUrlService s3PresignedUrlService;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
     @Override
@@ -62,6 +70,13 @@ public class PropertySeedInitializer implements ApplicationRunner {
             throw new IllegalStateException("Property seed owner must be identity verified: " + ownerEmail);
         }
         entityManager.lock(owner, LockModeType.PESSIMISTIC_WRITE);
+
+        List<String> imagePool = s3PresignedUrlService.listObjectUrls(SEED_IMAGE_FOLDER);
+        log.info("Seed image pool loaded: folder={}, count={}", SEED_IMAGE_FOLDER, imagePool.size());
+        if (imagePool.isEmpty()) {
+            throw new IllegalStateException(
+                    "Seed image pool is empty. Upload images to the S3 '" + SEED_IMAGE_FOLDER + "' folder before enabling property seeding.");
+        }
 
         SeedDataset dataset = readDataset();
         int created = 0;
@@ -82,7 +97,7 @@ public class PropertySeedInitializer implements ApplicationRunner {
                 }
 
                 Property property = buildProperty(owner, region, template, regionIndex, templateIndex);
-                addImages(property, template.propertyType(), sequence);
+                addImages(property, template.propertyType(), sequence, imagePool);
                 propertyRepository.save(property);
                 created++;
                 sequence++;
@@ -138,32 +153,26 @@ public class PropertySeedInitializer implements ApplicationRunner {
                 .build();
     }
 
-    private void addImages(Property property, PropertyType propertyType, int sequence) {
-        String baseUrl = trimTrailingSlash(properties.getImageBaseUrl());
-        if (!StringUtils.hasText(baseUrl) || sequence % 13 == 0) {
-            return;
+    /**
+     * S3 seed-images 폴더에 실제로 올라가 있는 사진 풀(개수 제한 없음) 중에서 매물마다 랜덤으로 뽑아 배정한다.
+     * 같은 매물 안에서 사진이 중복되지 않도록, 풀 안에서 뽑은 인덱스를 제거해가며 고른다.
+     */
+    private void addImages(Property property, PropertyType propertyType, int sequence, List<String> imagePool) {
+        if (sequence % 13 == 0) {
+            return; // 일부러 사진 없는 매물도 일부 섞어서 현실성을 준다
         }
 
-        List<String> imageNames = switch (propertyType) {
-            case ONE_ROOM -> List.of("one-room.png", "kitchen-bathroom.png");
-            case TWO_ROOM -> List.of("two-room.png", "kitchen-bathroom.png");
-            case OFFICETEL -> List.of("officetel.png", "kitchen-bathroom.png");
-            case APARTMENT -> List.of("apartment-exterior.png", "apartment-interior.png", "kitchen-bathroom.png");
-            default -> List.of("apartment-interior.png", "kitchen-bathroom.png");
-        };
-
-        for (int index = 0; index < imageNames.size(); index++) {
+        int imageCount = propertyType == PropertyType.APARTMENT ? 3 : 2;
+        List<String> candidates = new ArrayList<>(imagePool);
+        for (int index = 0; index < imageCount && !candidates.isEmpty(); index++) {
+            int pick = ThreadLocalRandom.current().nextInt(candidates.size());
+            String imageUrl = candidates.remove(pick);
             property.getImages().add(PropertyImage.builder()
                     .property(property)
-                    .imageUrl(baseUrl + "/" + imageNames.get(index))
+                    .imageUrl(imageUrl)
                     .isThumbnail(index == 0)
                     .build());
         }
-    }
-
-    private static String trimTrailingSlash(String value) {
-        if (!StringUtils.hasText(value)) return "";
-        return value.replaceFirst("/+$", "");
     }
 
     private static List<SeedTemplate> templates(String scope, int regionIndex) {
