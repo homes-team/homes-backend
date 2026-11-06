@@ -68,3 +68,6 @@ routing-data/
 
 # DB Password
 .env
+
+# 일회성 로컬 유틸리티 스크립트 (AWS/외부 API 키를 환경변수로 넘겨 받음 - 레포에 올릴 필요 없음)
+scripts/
