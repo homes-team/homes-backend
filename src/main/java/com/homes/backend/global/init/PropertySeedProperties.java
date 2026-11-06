@@ -12,5 +12,4 @@ import org.springframework.stereotype.Component;
 public class PropertySeedProperties {
     private boolean enabled = false;
     private String ownerEmail = "";
-    private String imageBaseUrl = "http://localhost:8080/seed-images";
 }

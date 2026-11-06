@@ -16,6 +16,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -25,6 +26,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -174,6 +176,23 @@ public class S3PresignedUrlService {
         if (deletedCount == null || deletedCount == 0L) {
             throw new CustomException(GlobalErrorCode.INVALID_INPUT);
         }
+    }
+
+    /**
+     * folder 아래에 실제로 올라가 있는 객체들의 공개 URL 목록을 그대로 조회한다.
+     * 파일 개수/이름을 코드에 미리 고정해두지 않고, S3에 뭐가 올라가 있든 그대로 반영하기 위함이다.
+     */
+    public List<String> listObjectUrls(String folder) {
+        ListObjectsV2Request request = ListObjectsV2Request.builder()
+                .bucket(bucket)
+                .prefix(folder + "/")
+                .build();
+
+        return s3Client.listObjectsV2(request).contents().stream()
+                .map(software.amazon.awssdk.services.s3.model.S3Object::key)
+                .filter(key -> !key.endsWith("/")) // "폴더 만들기"로 생긴 빈 placeholder 객체 제외
+                .map(key -> publicUrlPrefix + encodeKeyForUrl(key))
+                .toList();
     }
 
     @PreDestroy
