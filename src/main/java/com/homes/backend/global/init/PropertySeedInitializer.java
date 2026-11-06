@@ -73,6 +73,10 @@ public class PropertySeedInitializer implements ApplicationRunner {
 
         List<String> imagePool = s3PresignedUrlService.listObjectUrls(SEED_IMAGE_FOLDER);
         log.info("Seed image pool loaded: folder={}, count={}", SEED_IMAGE_FOLDER, imagePool.size());
+        if (imagePool.isEmpty()) {
+            throw new IllegalStateException(
+                    "Seed image pool is empty. Upload images to the S3 '" + SEED_IMAGE_FOLDER + "' folder before enabling property seeding.");
+        }
 
         SeedDataset dataset = readDataset();
         int created = 0;
@@ -154,7 +158,7 @@ public class PropertySeedInitializer implements ApplicationRunner {
      * 같은 매물 안에서 사진이 중복되지 않도록, 풀 안에서 뽑은 인덱스를 제거해가며 고른다.
      */
     private void addImages(Property property, PropertyType propertyType, int sequence, List<String> imagePool) {
-        if (imagePool.isEmpty() || sequence % 13 == 0) {
+        if (sequence % 13 == 0) {
             return; // 일부러 사진 없는 매물도 일부 섞어서 현실성을 준다
         }
 

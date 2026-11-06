@@ -181,6 +181,8 @@ public class S3PresignedUrlService {
     /**
      * folder 아래에 실제로 올라가 있는 객체들의 공개 URL 목록을 그대로 조회한다.
      * 파일 개수/이름을 코드에 미리 고정해두지 않고, S3에 뭐가 올라가 있든 그대로 반영하기 위함이다.
+     * listObjectsV2는 한 번에 최대 1,000개까지만 반환하므로, 1,000개를 넘을 수 있는 경우를 대비해
+     * 여러 페이지를 자동으로 이어 읽어주는 Paginator를 사용한다.
      */
     public List<String> listObjectUrls(String folder) {
         ListObjectsV2Request request = ListObjectsV2Request.builder()
@@ -188,7 +190,7 @@ public class S3PresignedUrlService {
                 .prefix(folder + "/")
                 .build();
 
-        return s3Client.listObjectsV2(request).contents().stream()
+        return s3Client.listObjectsV2Paginator(request).contents().stream()
                 .map(software.amazon.awssdk.services.s3.model.S3Object::key)
                 .filter(key -> !key.endsWith("/")) // "폴더 만들기"로 생긴 빈 placeholder 객체 제외
                 .map(key -> publicUrlPrefix + encodeKeyForUrl(key))
