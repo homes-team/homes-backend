@@ -24,7 +24,6 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -32,10 +31,13 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * local 전용이 아니라 모든 프로파일(배포 환경 포함)에서 동작하도록 열어두되,
+ * app.seed.properties.enabled(기본값 false)를 명시적으로 켜야만 실행되는 구조로 안전장치를 둔다.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@Profile("local")
 @ConditionalOnProperty(prefix = "app.seed.properties", name = "enabled", havingValue = "true")
 public class PropertySeedInitializer implements ApplicationRunner {
     private static final String DATASET_PATH = "seed/property-regions-v1.json";
